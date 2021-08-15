@@ -15,6 +15,7 @@ var require$$4 = require('util');
 var require$$5 = require('assert');
 var require$$1 = require('path');
 var os = require('os');
+var symbols = require('log-symbols');
 var colors = require('ansi-colors');
 var flatCache = require('flat-cache');
 var events = require('events');
@@ -48,6 +49,7 @@ var require$$0__default$1 = /*#__PURE__*/_interopDefaultLegacy(require$$0$1);
 var require$$4__default = /*#__PURE__*/_interopDefaultLegacy(require$$4);
 var require$$5__default = /*#__PURE__*/_interopDefaultLegacy(require$$5);
 var require$$1__default = /*#__PURE__*/_interopDefaultLegacy(require$$1);
+var symbols__default = /*#__PURE__*/_interopDefaultLegacy(symbols);
 var colors__default = /*#__PURE__*/_interopDefaultLegacy(colors);
 var flatCache__default = /*#__PURE__*/_interopDefaultLegacy(flatCache);
 var glob__default = /*#__PURE__*/_interopDefaultLegacy(glob);
@@ -2874,7 +2876,7 @@ var lib = {
   ...remove_1
 };
 
-let pkgPath = __dirname.indexOf('cli') !== -1
+const pkgPath = __dirname.indexOf('cli') !== -1
     ? require$$1.join(__dirname, '../../package.json')
     : require$$1.join(__dirname, '../../package.json');
 const PKG = readJSONSync(pkgPath);
@@ -3051,7 +3053,8 @@ function isPromise(value) {
  * @returns a tuple containing last migration and direction.
  */
 function defineActive(migrations, dir) {
-    return [require$$1.basename(migrations[migrations.length - 1].filename), dir];
+    const last = migrations[migrations.length - 1].filename;
+    return [getBaseName(last), dir];
 }
 /**
  * Helper to format the last migrations for reverting.
@@ -3062,9 +3065,33 @@ function defineActive(migrations, dir) {
  */
 function defineReverts(migrations, dir) {
     const clone = [...migrations].reverse(); // reverse so we traverse in opposite order.
-    const names = clone.map(file => require$$1.basename(file.filename).replace(require$$1.extname(file.filename), ''));
+    const names = clone.map(file => getBaseName(file.filename));
     // Don't flip direction here as mygra.revert() will do that automatically.
     return [names, dir];
+}
+/**
+ * Makes errors more readable.
+ *
+ * @param err the error to addd colorization to.
+ */
+function colorizeError(err) {
+    const _err = err;
+    _err.colorizedMessage = symbols__default['default'].error + ' ' + colorize((err.name || 'Error') + ': ' + err.message || 'Unknown', 'redBright');
+    _err.colorizedStack = colorize((err.stack || '').split('\n').slice(1).join('\n'), 'dim');
+    return _err;
+}
+/**
+ * Gets the base name of a file path with or without file extension.
+ *
+ * @param filepath the full path to the file.
+ * @param includeExt when true the file extension is retained.
+ * @returns the filename only from the specified path.
+ */
+function getBaseName(filepath, includeExt = false) {
+    filepath = require$$1.basename(filepath);
+    if (includeExt)
+        return filepath;
+    return filepath.replace(require$$1.extname(filepath), '');
 }
 
 const config = initConfig();
@@ -3082,6 +3109,13 @@ class Mygra extends events.EventEmitter {
         };
         this.bindEvents(this.options.events);
         config.update({ ...this.options });
+        this.duplicateNames().then(dupes => {
+            if (dupes.length) {
+                const err = colorizeError(Error(`Please remove duplicate migration names:`));
+                const stack = err.colorizedMessage + '\n' + dupes.join('\n') + '\n' + err.colorizedStack;
+                throw stack;
+            }
+        });
     }
     bindEvents(events) {
         if (!events)
@@ -3156,7 +3190,7 @@ class Mygra extends events.EventEmitter {
         if (hasTemplates) {
             const files = glob__default['default'].sync(`${templatesDir}/*${this.extension}`, { onlyFiles: true });
             for (const file of files) {
-                const base = require$$1.basename(file).replace(require$$1.extname(file), '');
+                const base = getBaseName(file);
                 const result = await Promise.resolve().then(function () { return /*#__PURE__*/_interopNamespace(require(file)); });
                 _templates[base] = result.default || result;
             }
@@ -3183,6 +3217,37 @@ class Mygra extends events.EventEmitter {
         const templates = await this.getTemplates();
         return templates[name];
     }
+    /**
+     * Verifies that the provided migration name is unique.
+     *
+     * @param name the name to be inspected
+     * @returns a boolean indicating if the name is unique.
+     */
+    async isUniqueName(name) {
+        const filenames = await this.getFilenames();
+        const found = findIndex(filenames, name);
+        return found === -1;
+    }
+    /**
+     * Gets list of duplicate migration names.
+     *
+     * @returns object indicating duplicates and their names.
+     */
+    async duplicateNames() {
+        let filenames = await this.getFilenames();
+        filenames = filenames.map(name => {
+            const base = require$$1.basename(name);
+            return base.replace(/^\d+_/, '').replace(require$$1.extname(name), '');
+        });
+        if (filenames.length === 1)
+            return [];
+        const found = [];
+        return filenames.filter(v => {
+            const isDupe = found.includes(v);
+            found.push(v);
+            return isDupe;
+        });
+    }
     async create(nameOrOptions, options) {
         let name = nameOrOptions;
         if (typeof nameOrOptions === 'object') {
@@ -3199,9 +3264,18 @@ class Mygra extends events.EventEmitter {
         if (!options.name)
             throw new Error(`Cannot create migration with name of undefined.`);
         const baseName = options.name.replace(/\s/g, '_').toLowerCase();
+        const isUnique = await this.isUniqueName(baseName);
+        if (!isUnique)
+            return {
+                ok: false,
+                name,
+                message: `Cannot create duplicate migration name: "${baseName}"`
+            };
         name = Date.now() + '_' + baseName;
         const template = await this.getTemplate(options.template);
         const filename = require$$1.join(this.directory, 'migrations', name + this.extension);
+        options.up = options.up?.length ? "`" + options.up + "`" : options.up;
+        options.down = options.down?.length ? "`" + options.down + "`" : options.down;
         const writeResult = await writeFileAsync(filename, template({ ...options, name }));
         this.emit('created', { name, filename, ok: writeResult || false });
         return {
@@ -3251,7 +3325,7 @@ class Mygra extends events.EventEmitter {
         else if (dir) {
             if (dir === 'up') {
                 filtered = files.slice(0, lastIdx + offset);
-                filtered = !!levels ? filtered.slice(-levels) : filtered;
+                filtered = levels ? filtered.slice(-levels) : filtered;
             }
             else {
                 levels = levels || 1;
@@ -3469,10 +3543,10 @@ class Mygra extends events.EventEmitter {
             }
             // The revert migration names will now be the opposite
             // of whatever the clone order is.
-            revertNames = [...clone].reverse().map(file => require$$1.basename(file.filename).replace(require$$1.extname(file.filename), ''));
+            revertNames = [...clone].reverse().map(file => getBaseName(file.filename));
             // Get last to store as active migration.
             last = clone[clone.length - 1];
-            name = require$$1.basename(last.filename).replace(require$$1.extname(last.filename), '');
+            name = getBaseName(last.filename);
             if (!clone.length) {
                 result = {
                     type: newDir,
@@ -3605,9 +3679,11 @@ exports.MYGRA_DEFAULT_PATH = MYGRA_DEFAULT_PATH;
 exports.Mygra = Mygra;
 exports.PKG = PKG;
 exports.colorize = colorize;
+exports.colorizeError = colorizeError;
 exports.defineActive = defineActive;
 exports.defineReverts = defineReverts;
 exports.findIndex = findIndex;
+exports.getBaseName = getBaseName;
 exports.initConfig = initConfig;
 exports.isMatch = isMatch;
 exports.isPromise = isPromise;

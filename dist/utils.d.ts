@@ -94,3 +94,20 @@ export declare function defineActive(migrations: IMigration[], dir: MigrateDirec
  * @returns a tuple containing last migrations and direction.
  */
 export declare function defineReverts(migrations: IMigration[], dir: MigrateDirection): [string[], MigrateDirection];
+/**
+ * Makes errors more readable.
+ *
+ * @param err the error to addd colorization to.
+ */
+export declare function colorizeError(err: Error): Error & {
+    colorizedMessage: string;
+    colorizedStack: string;
+};
+/**
+ * Gets the base name of a file path with or without file extension.
+ *
+ * @param filepath the full path to the file.
+ * @param includeExt when true the file extension is retained.
+ * @returns the filename only from the specified path.
+ */
+export declare function getBaseName(filepath: string, includeExt?: boolean): string;

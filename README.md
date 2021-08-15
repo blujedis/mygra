@@ -44,6 +44,49 @@ Run the following to generate a migration the resulting output will be located a
 mygra create 'user table'
 ```
 
+## Edit Migration
+
+Open the newly created migration and edit your statements as required. In this case our **config.js** is exporting a [Sqlite3](https://www.npmjs.com/package/sqlite3) connection with which we use `conn.run()`.
+
+Where `conn` is our `connection` that we exported in our `config.js`. The connection is passed to each migration up/down handlers.
+
+You may return a promise of boolean or use node style callback as shown here.
+
+```js
+const name = 'user_table';
+const description = '';
+
+async function up(conn, cb) {
+  const query = `CREATE TABLE IF NOT EXISTS user (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL
+  )`;
+
+  conn.run(query, (err) => {
+    if (err) return cb(err);
+    cb(null, true);
+  });
+}
+
+async function down(conn, cb) {
+  const query = `DROP TABLE IF EXISTS user`;
+
+  return conn.run(query, (err) => {
+    if (err) return cb(err);
+    cb(null, true);
+  });
+}
+
+module.exports = {
+  name,
+  description,
+  up,
+  down,
+};
+```
+
 ## Run the Migration
 
 Migrations can be run as `up` or `down`. If you wish to see a dry run simply add `--preview` to your command.
