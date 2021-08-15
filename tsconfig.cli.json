@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "target": "ES6",
+    "module": "CommonJS",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "strict": true,
+    "resolveJsonModule": true,
+    "outDir": "dist/cli",
+    "declaration": true,
+    "declarationDir": "dist/cli",
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": false,
+    "isolatedModules": true,
+    "downlevelIteration": true
+  },
+  "exclude": ["node_modules", "dist", ".tmp"],
+  "include": ["./src/cli.ts"]
+}

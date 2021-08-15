@@ -1,0 +1,102 @@
+{
+  "name": "mygra",
+  "version": "0.0.1",
+  "description": "Agnostic database migration tool",
+  "bin": {
+    "mygra": "bin/cli.js"
+  },
+  "keywords": [
+    "migration",
+    "migrate",
+    "prisma",
+    "mysql",
+    "mariadb",
+    "postresql",
+    "db-migrate"
+  ],
+  "homepage": "https://github.com/blujedis/mygra#readme",
+  "bugs": {
+    "url": "https://github.com/blujedis/mygra/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blujedis/mygra.git"
+  },
+  "license": "MIT",
+  "author": "Blujedi LLC <blujedicorp@gmail.com>",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm",
+  "source": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "docs": "rimraf docs && typedoc src/index.ts && touch ./docs/.nojekyll",
+    "clean": "rimraf dist",
+    "lint": "eslint src/**/*.{ts,tsx,js} --fix",
+    "prebuild": "npm run clean",
+    "pretest": "npm run lint",
+    "build:cli": "tsc --project ./tsconfig.cli.json",
+    "watch:cli": "tsc --project ./tsconfig.cli.json -w",
+    "build": "npm run clean && rollup -c && npm run build:cli && npm run docs",
+    "prerelease": "npm run build",
+    "postrelease": "git push --follow-tags",
+    "release": "npx standard-version",
+    "types:check": "tsc --noEmit",
+    "types:watch": "npm run types:check -- --watch",
+    "start": "rollup -c -w & npm run watch:cli",
+    "prepare": "husky install"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --cache --fix"
+    ],
+    "*.{json,md,yml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^12.1.4",
+    "@commitlint/config-conventional": "^12.1.4",
+    "@rollup/plugin-commonjs": "^19.0.0",
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-node-resolve": "^13.0.0",
+    "@types/flat-cache": "^2.0.0",
+    "@types/fs-extra": "^9.0.12",
+    "@types/webpack-env": "^1.16.2",
+    "@types/yargs-parser": "^20.2.1",
+    "@typescript-eslint/eslint-plugin": "^4.24.0",
+    "@typescript-eslint/parser": "^4.24.0",
+    "eslint": "^7.26.0",
+    "eslint-plugin-jest": "^24.3.6",
+    "eslint-plugin-tsdoc": "^0.2.14",
+    "fs-extra": "^10.0.0",
+    "husky": "^6.0.0",
+    "jest": "^27.0.6",
+    "lint-staged": "^11.0.0",
+    "prettier": "^2.3.2",
+    "rimraf": "^3.0.2",
+    "rollup": "^2.48.0",
+    "rollup-plugin-peer-deps-external": "^2.2.4",
+    "rollup-plugin-rename": "^1.0.1",
+    "rollup-plugin-terser": "^7.0.2",
+    "rollup-plugin-typescript2": "^0.30.0",
+    "ts-node": "^10.2.0",
+    "tslib": "^2.2.0",
+    "typedoc": "^0.20.37",
+    "typescript": "^4.2.4"
+  },
+  "dependencies": {
+    "ansi-colors": "^4.1.1",
+    "fast-glob": "^3.2.7",
+    "flat-cache": "^3.0.4",
+    "log-symbols": "^4.1.0",
+    "yargs-parser": "^20.2.9"
+  }
+}

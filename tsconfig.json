@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "rootDir": "src",
+    "target": "ESNext",
+    "module": "ESNext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "strict": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationDir": "dist",
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": false,
+    "isolatedModules": true,
+    "downlevelIteration": true,
+    "lib": ["esnext"]
+  },
+  "exclude": ["node_modules", "dist", ".tmp", "./src/cli.ts"],
+  "include": ["./src/**/*.ts", "./src/**/*.tsx"]
+}

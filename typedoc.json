@@ -1,0 +1,6 @@
+{
+  "out": "./docs",
+  "name": "Mygra",
+  "readme": "none",
+  "tsconfig": "./tsconfig.json"
+}
