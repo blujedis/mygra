@@ -117,3 +117,4 @@ web_modules/
 .tmp
 mygra.json
 example/
+**/.DS_Store
