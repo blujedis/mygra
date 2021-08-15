@@ -4,7 +4,7 @@ import { join, basename, resolve, parse, extname } from 'path';
 import { existsSync } from 'fs';
 import defaultTemplates from './templates';
 import { promisify } from 'util';
-import { findIndex, writeFileAsync, initConfig, defineActive, defineReverts } from './utils';
+import { findIndex, writeFileAsync, initConfig, defineActive, defineReverts, colorizeError, getBaseName } from './utils';
 import { ConnectionHandler, CreateMigrationHandler, Events, IMigration, IMigrationCreateResult, IMigrationOptions, IMigrationResult, IMygra, MigrateDirection } from './types';
 
 const config = initConfig();
@@ -14,7 +14,9 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   options!: IMygra<C>;
 
   constructor(options = {} as IMygra) {
+
     super();
+
     options.templates = { ...defaultTemplates, ...options.templates };
     this.options = {
       ...config.props,
@@ -24,8 +26,18 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       },
       ...options
     } as Required<IMygra<C>>;
+
     this.bindEvents(this.options.events);
     config.update({ ...this.options });
+
+    this.duplicateNames().then(dupes => {
+      if (dupes.length) {
+        const err = colorizeError(Error(`Please remove duplicate migration names:`));
+        const stack = err.colorizedMessage + '\n' + dupes.join('\n') + '\n' + err.colorizedStack;
+        throw stack;
+      }
+    });
+
   }
 
   private bindEvents(events?: Events) {
@@ -112,7 +124,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     if (hasTemplates) {
       const files = glob.sync(`${templatesDir}/*${this.extension}`, { onlyFiles: true });
       for (const file of files) {
-        const base = basename(file).replace(extname(file), '');
+        const base = getBaseName(file);
         const result = await import(file) as CreateMigrationHandler;
         _templates[base] = (result as any).default || result;
       }
@@ -142,6 +154,39 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   async getTemplate(name = 'default') {
     const templates = await this.getTemplates();
     return templates[name];
+  }
+
+  /**
+   * Verifies that the provided migration name is unique.
+   * 
+   * @param name the name to be inspected
+   * @returns a boolean indicating if the name is unique.
+   */
+  async isUniqueName(name: string) {
+    const filenames = await this.getFilenames();
+    const found = findIndex(filenames, name);
+    return found === -1;
+  }
+
+  /**
+   * Gets list of duplicate migration names.
+   * 
+   * @returns object indicating duplicates and their names.
+   */
+  async duplicateNames() {
+    let filenames = await this.getFilenames();
+    filenames = filenames.map(name => {
+      const base = basename(name);
+      return base.replace(/^\d+_/, '').replace(extname(name), '');
+    });
+    if (filenames.length === 1)
+      return [];
+    const found = [] as string[];
+    return filenames.filter(v => {
+      const isDupe = found.includes(v);
+      found.push(v);
+      return isDupe;
+    });
   }
 
   /**
@@ -182,10 +227,23 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       throw new Error(`Cannot create migration with name of undefined.`);
 
     const baseName = options.name.replace(/\s/g, '_').toLowerCase();
+
+    const isUnique = await this.isUniqueName(baseName);
+
+    if (!isUnique)
+      return {
+        ok: false,
+        name,
+        message: `Cannot create duplicate migration name: "${baseName}"`
+      } as IMigrationCreateResult;
+
     name = Date.now() + '_' + baseName;
     const template = await this.getTemplate(options.template);
 
     const filename = join(this.directory, 'migrations', name + this.extension);
+
+    options.up = options.up?.length ? "`" + options.up + "`" : options.up;
+    options.down = options.down?.length ? "`" + options.down + "`" : options.down;
 
     const writeResult = await writeFileAsync(filename, template({ ...options, name }));
 
@@ -552,11 +610,11 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       // The revert migration names will now be the opposite
       // of whatever the clone order is.
-      revertNames = [...clone].reverse().map(file => basename(file.filename).replace(extname(file.filename), ''));
+      revertNames = [...clone].reverse().map(file => getBaseName(file.filename));
 
       // Get last to store as active migration.
       last = clone[clone.length - 1];
-      name = basename(last.filename).replace(extname(last.filename), '');
+      name = getBaseName(last.filename);
 
       if (!clone.length) {
 

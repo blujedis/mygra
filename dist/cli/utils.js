@@ -3,13 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.defineReverts = exports.defineActive = exports.isPromise = exports.initConfig = exports.colorize = exports.readJSONSync = exports.writeFileAsync = exports.readFileAsync = exports.findIndex = exports.isMatch = exports.MYGRA_DEFAULTS = exports.MYGRA_CONFIG_PATH = exports.MYGRA_DEFAULT_PATH = exports.MYGRA_CONFIG_DIR = exports.APP_PKG = exports.PKG = void 0;
+exports.getBaseName = exports.colorizeError = exports.defineReverts = exports.defineActive = exports.isPromise = exports.initConfig = exports.colorize = exports.readJSONSync = exports.writeFileAsync = exports.readFileAsync = exports.findIndex = exports.isMatch = exports.MYGRA_DEFAULTS = exports.MYGRA_CONFIG_PATH = exports.MYGRA_DEFAULT_PATH = exports.MYGRA_CONFIG_DIR = exports.APP_PKG = exports.PKG = void 0;
 const fs_extra_1 = require("fs-extra");
 const path_1 = require("path");
 const os_1 = require("os");
+const log_symbols_1 = __importDefault(require("log-symbols"));
 const ansi_colors_1 = __importDefault(require("ansi-colors"));
 const flat_cache_1 = __importDefault(require("flat-cache"));
-let pkgPath = __dirname.indexOf('cli') !== -1
+const pkgPath = __dirname.indexOf('cli') !== -1
     ? path_1.join(__dirname, '../../package.json')
     : path_1.join(__dirname, '../../package.json');
 exports.PKG = readJSONSync(pkgPath);
@@ -194,7 +195,8 @@ exports.isPromise = isPromise;
  * @returns a tuple containing last migration and direction.
  */
 function defineActive(migrations, dir) {
-    return [path_1.basename(migrations[migrations.length - 1].filename), dir];
+    const last = migrations[migrations.length - 1].filename;
+    return [getBaseName(last), dir];
 }
 exports.defineActive = defineActive;
 /**
@@ -206,8 +208,34 @@ exports.defineActive = defineActive;
  */
 function defineReverts(migrations, dir) {
     const clone = [...migrations].reverse(); // reverse so we traverse in opposite order.
-    const names = clone.map(file => path_1.basename(file.filename).replace(path_1.extname(file.filename), ''));
+    const names = clone.map(file => getBaseName(file.filename));
     // Don't flip direction here as mygra.revert() will do that automatically.
     return [names, dir];
 }
 exports.defineReverts = defineReverts;
+/**
+ * Makes errors more readable.
+ *
+ * @param err the error to addd colorization to.
+ */
+function colorizeError(err) {
+    const _err = err;
+    _err.colorizedMessage = log_symbols_1.default.error + ' ' + colorize((err.name || 'Error') + ': ' + err.message || 'Unknown', 'redBright');
+    _err.colorizedStack = colorize((err.stack || '').split('\n').slice(1).join('\n'), 'dim');
+    return _err;
+}
+exports.colorizeError = colorizeError;
+/**
+ * Gets the base name of a file path with or without file extension.
+ *
+ * @param filepath the full path to the file.
+ * @param includeExt when true the file extension is retained.
+ * @returns the filename only from the specified path.
+ */
+function getBaseName(filepath, includeExt = false) {
+    filepath = path_1.basename(filepath);
+    if (includeExt)
+        return filepath;
+    return filepath.replace(path_1.extname(filepath), '');
+}
+exports.getBaseName = getBaseName;

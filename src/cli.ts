@@ -1,14 +1,14 @@
 import parser from 'yargs-parser';
-import { join, parse, basename, extname } from 'path';
+import { join, parse } from 'path';
 import { Mygra } from './mygra';
 import symbols from 'log-symbols';
 import { copySync, existsSync } from 'fs-extra';
-import { colorize, MYGRA_DEFAULT_PATH, initConfig, PKG, APP_PKG, findIndex } from './utils';
+import { colorize, MYGRA_DEFAULT_PATH, initConfig, PKG, APP_PKG, findIndex, colorizeError, getBaseName } from './utils';
 import { IMigrationResult, IMygra } from './types';
 
 const argv = parser(process.argv.slice(2), {
   alias: { template: ['t'], up: ['u'], down: ['d'], preview: ['p'], force: ['f'] },
-  string: ['template', 'up', 'down', 'description'],
+  string: ['template', 'description'],
   boolean: ['preview', 'force']
 });
 
@@ -16,7 +16,7 @@ const appNameLower = PKG.name;
 const appName = appNameLower.charAt(0).toUpperCase() + appNameLower.slice(1);
 const cwd = process.cwd();
 const cmd = argv._[0];
-const commands = ['create', 'up', 'down', 'init', 'help', 'active', 'list', 'show', 'get', 'set', 'config', 'revert'];
+const commands = ['create', 'up', 'down', 'init', 'help', 'list', 'show', 'get', 'set', 'config', 'revert', 'examples'];
 
 if (!commands.includes(cmd))
   process.exit();
@@ -25,8 +25,8 @@ const nameStr = colorize(appName, 'blueBright');
 const verStr = colorize(PKG.version, 'blueBright');
 
 const help = `
-${nameStr}                                                        ver: ${verStr}
-=======================================================================
+${nameStr} (${verStr})
+------------------------------------------------------------------------
 
 ${colorize(`Usage: ${appNameLower} <command> [...options]`, 'dim')}
 
@@ -40,23 +40,26 @@ ${colorize('Commands:', 'cyanBright')}
   revert                          reverts or undos last migration
   reset                           resets all migrations
   list                            shows list of migration files
-  active                          shows active or last migration
   config                          shows the app's config
   init                            initializes copying blueprints
+  examples                        shows examples
   help                            show the help menu
 
 ${colorize('Options:', 'cyanBright')}
   --template, -t            specifies the template to be used
-  --up, -u                  specify migration up command
-  --down, -d                specify migration down command
+  --up, -u                  specify migration up command string
+  --down, -d                specify migration down command string
   --description, -e         specify migration description
   --preview, -p             up, down or reset shows dry run
   --stacktrace, -s          errors will show stacktrace
   --force, -f               forces migration action
+`;
 
+const examples = `
 ${colorize('Examples:', 'cyanBright')}
   ${appNameLower} create user
   ${appNameLower} create user --template my-template
+  ${appNameLower} create user_table --up='CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY AUTOINCREMENT)' --down='DROP TABLE IF EXISTS user' --description='ACL permissions table.'
   ${appNameLower} up user
   ${appNameLower} up 2
   ${appNameLower} up all
@@ -64,12 +67,12 @@ ${colorize('Examples:', 'cyanBright')}
   ${appNameLower} set active some_migration up 
   ${appNameLower} set active null (or empty or none to reset to []) 
   ${appNameLower} set reverts "migration_one,migration_two" down
-`;
+`
 
 function handleResult(result: IMigrationResult) {
   let names = !result.names.length ? 'none' : result.names;
   if (Array.isArray(names))
-    names = names.map(f => basename(f).replace(extname(f), '')).join(', ');
+    names = names.map(f => getBaseName(f)).join(', ');
   let message = result.message;
   let stack = '';
   if (message instanceof Error) {
@@ -105,6 +108,10 @@ async function listen() {
 
   if (cmd === 'help') {
     console.log(help);
+  }
+
+  if (cmd === 'examples') {
+    console.log(examples);
   }
 
   else if (cmd === 'config') {
@@ -164,8 +171,9 @@ async function listen() {
   }
 
   else if (cmd === 'list') {
-    const files = await mygra.getFilenames();
-    console.log(files.join('\n'));
+    let filenames = await mygra.getFilenames();
+    filenames = filenames.map(file => getBaseName(file));
+    console.log('\n' + filenames.join('\n') + '\n');
   }
 
   else if (cmd === 'show') {
@@ -178,20 +186,27 @@ async function listen() {
       const filename = files[found];
       const imported = await mygra.import(filename);
       const parsed = parse(filename);
+      const hasMethod = argv.up || argv.down;
+      const showStates = {
+        up: !hasMethod || argv.up,
+        down: !hasMethod || argv.down
+      };
+      console.log(argv);
       console.log(`\n----------------------------------------------`);
       console.log(` ${colorize(parsed.name, 'whiteBright')}`);
       if (imported.description)
         console.log(` ${colorize(imported.description, 'dim')}`);
       console.log(`----------------------------------------------\n`);
-      console.log(colorize((imported.up || '').toString(), 'greenBright'));
-      console.log();
-      console.log(colorize((imported.down || '').toString(), 'redBright'));
-      console.log();
-    }
-  }
+      if (showStates.up) {
+        console.log(colorize((imported.up || '').toString(), 'greenBright'));
+        console.log();
+      }
+      if (showStates.down) {
+        console.log(colorize((imported.down || '').toString(), 'redBright'));
+        console.log();
+      }
 
-  else if (cmd === 'active') {
-    console.log(config.get('active'));
+    }
   }
 
   else if (cmd === 'create') {
@@ -247,8 +262,10 @@ async function listen() {
 }
 
 process.on('uncaughtException', (err) => {
-  console.error(symbols.error, colorize((err.name || 'Error') + ': ' + err.message || 'Unknown', 'redBright'));
-  console.error(colorize((err.stack || '').split('\n').slice(1).join('\n'), 'dim'));
+  const _err = colorizeError(err);
+  console.log(_err.colorizedMessage);
+  console.log(_err.colorizedStack);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {

@@ -3,11 +3,11 @@ const name = '${name}';
 const description = '${description}';
 
 async function up(conn, cb) {
-  ${up || ''}
+  const query = ${up};
 }
 
 async function down(conn, cb) {
-  ${down || ''}
+  const query = ${down};
 }
 
 module.exports = {

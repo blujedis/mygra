@@ -49,6 +49,13 @@ class Mygra extends events_1.EventEmitter {
             } }), options);
         this.bindEvents(this.options.events);
         config.update(Object.assign({}, this.options));
+        this.duplicateNames().then(dupes => {
+            if (dupes.length) {
+                const err = utils_1.colorizeError(Error(`Please remove duplicate migration names:`));
+                const stack = err.colorizedMessage + '\n' + dupes.join('\n') + '\n' + err.colorizedStack;
+                throw stack;
+            }
+        });
     }
     bindEvents(events) {
         if (!events)
@@ -124,7 +131,7 @@ class Mygra extends events_1.EventEmitter {
             if (hasTemplates) {
                 const files = fast_glob_1.default.sync(`${templatesDir}/*${this.extension}`, { onlyFiles: true });
                 for (const file of files) {
-                    const base = path_1.basename(file).replace(path_1.extname(file), '');
+                    const base = utils_1.getBaseName(file);
                     const result = yield Promise.resolve().then(() => __importStar(require(file)));
                     _templates[base] = result.default || result;
                 }
@@ -156,7 +163,43 @@ class Mygra extends events_1.EventEmitter {
             return templates[name];
         });
     }
+    /**
+     * Verifies that the provided migration name is unique.
+     *
+     * @param name the name to be inspected
+     * @returns a boolean indicating if the name is unique.
+     */
+    isUniqueName(name) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const filenames = yield this.getFilenames();
+            const found = utils_1.findIndex(filenames, name);
+            return found === -1;
+        });
+    }
+    /**
+     * Gets list of duplicate migration names.
+     *
+     * @returns object indicating duplicates and their names.
+     */
+    duplicateNames() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let filenames = yield this.getFilenames();
+            filenames = filenames.map(name => {
+                const base = path_1.basename(name);
+                return base.replace(/^\d+_/, '').replace(path_1.extname(name), '');
+            });
+            if (filenames.length === 1)
+                return [];
+            const found = [];
+            return filenames.filter(v => {
+                const isDupe = found.includes(v);
+                found.push(v);
+                return isDupe;
+            });
+        });
+    }
     create(nameOrOptions, options) {
+        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             let name = nameOrOptions;
             if (typeof nameOrOptions === 'object') {
@@ -167,9 +210,18 @@ class Mygra extends events_1.EventEmitter {
             if (!options.name)
                 throw new Error(`Cannot create migration with name of undefined.`);
             const baseName = options.name.replace(/\s/g, '_').toLowerCase();
+            const isUnique = yield this.isUniqueName(baseName);
+            if (!isUnique)
+                return {
+                    ok: false,
+                    name,
+                    message: `Cannot create duplicate migration name: "${baseName}"`
+                };
             name = Date.now() + '_' + baseName;
             const template = yield this.getTemplate(options.template);
             const filename = path_1.join(this.directory, 'migrations', name + this.extension);
+            options.up = ((_a = options.up) === null || _a === void 0 ? void 0 : _a.length) ? "`" + options.up + "`" : options.up;
+            options.down = ((_b = options.down) === null || _b === void 0 ? void 0 : _b.length) ? "`" + options.down + "`" : options.down;
             const writeResult = yield utils_1.writeFileAsync(filename, template(Object.assign(Object.assign({}, options), { name })));
             this.emit('created', { name, filename, ok: writeResult || false });
             return {
@@ -221,7 +273,7 @@ class Mygra extends events_1.EventEmitter {
             else if (dir) {
                 if (dir === 'up') {
                     filtered = files.slice(0, lastIdx + offset);
-                    filtered = !!levels ? filtered.slice(-levels) : filtered;
+                    filtered = levels ? filtered.slice(-levels) : filtered;
                 }
                 else {
                     levels = levels || 1;
@@ -449,10 +501,10 @@ class Mygra extends events_1.EventEmitter {
                 }
                 // The revert migration names will now be the opposite
                 // of whatever the clone order is.
-                revertNames = [...clone].reverse().map(file => path_1.basename(file.filename).replace(path_1.extname(file.filename), ''));
+                revertNames = [...clone].reverse().map(file => utils_1.getBaseName(file.filename));
                 // Get last to store as active migration.
                 last = clone[clone.length - 1];
-                name = path_1.basename(last.filename).replace(path_1.extname(last.filename), '');
+                name = utils_1.getBaseName(last.filename);
                 if (!clone.length) {
                     result = {
                         type: newDir,

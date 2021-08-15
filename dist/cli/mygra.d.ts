@@ -51,6 +51,19 @@ export declare class Mygra<C extends ConnectionHandler = ConnectionHandler> exte
      */
     getTemplate(name?: string): Promise<CreateMigrationHandler>;
     /**
+     * Verifies that the provided migration name is unique.
+     *
+     * @param name the name to be inspected
+     * @returns a boolean indicating if the name is unique.
+     */
+    isUniqueName(name: string): Promise<boolean>;
+    /**
+     * Gets list of duplicate migration names.
+     *
+     * @returns object indicating duplicates and their names.
+     */
+    duplicateNames(): Promise<string[]>;
+    /**
      * Creates new migration.
      *
      * @param name the name of the migration to create.

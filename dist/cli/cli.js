@@ -50,21 +50,21 @@ const fs_extra_1 = require("fs-extra");
 const utils_1 = require("./utils");
 const argv = yargs_parser_1.default(process.argv.slice(2), {
     alias: { template: ['t'], up: ['u'], down: ['d'], preview: ['p'], force: ['f'] },
-    string: ['template', 'up', 'down', 'description'],
+    string: ['template', 'description'],
     boolean: ['preview', 'force']
 });
 const appNameLower = utils_1.PKG.name;
 const appName = appNameLower.charAt(0).toUpperCase() + appNameLower.slice(1);
 const cwd = process.cwd();
 const cmd = argv._[0];
-const commands = ['create', 'up', 'down', 'init', 'help', 'active', 'list', 'show', 'get', 'set', 'config', 'revert'];
+const commands = ['create', 'up', 'down', 'init', 'help', 'list', 'show', 'get', 'set', 'config', 'revert', 'examples'];
 if (!commands.includes(cmd))
     process.exit();
 const nameStr = utils_1.colorize(appName, 'blueBright');
 const verStr = utils_1.colorize(utils_1.PKG.version, 'blueBright');
 const help = `
-${nameStr}                                                        ver: ${verStr}
-=======================================================================
+${nameStr} (${verStr})
+------------------------------------------------------------------------
 
 ${utils_1.colorize(`Usage: ${appNameLower} <command> [...options]`, 'dim')}
 
@@ -78,23 +78,25 @@ ${utils_1.colorize('Commands:', 'cyanBright')}
   revert                          reverts or undos last migration
   reset                           resets all migrations
   list                            shows list of migration files
-  active                          shows active or last migration
   config                          shows the app's config
   init                            initializes copying blueprints
+  examples                        shows examples
   help                            show the help menu
 
 ${utils_1.colorize('Options:', 'cyanBright')}
   --template, -t            specifies the template to be used
-  --up, -u                  specify migration up command
-  --down, -d                specify migration down command
+  --up, -u                  specify migration up command string
+  --down, -d                specify migration down command string
   --description, -e         specify migration description
   --preview, -p             up, down or reset shows dry run
   --stacktrace, -s          errors will show stacktrace
   --force, -f               forces migration action
-
+`;
+const examples = `
 ${utils_1.colorize('Examples:', 'cyanBright')}
   ${appNameLower} create user
   ${appNameLower} create user --template my-template
+  ${appNameLower} create user_table --up='CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY AUTOINCREMENT)' --down='DROP TABLE IF EXISTS user' --description='ACL permissions table.'
   ${appNameLower} up user
   ${appNameLower} up 2
   ${appNameLower} up all
@@ -106,7 +108,7 @@ ${utils_1.colorize('Examples:', 'cyanBright')}
 function handleResult(result) {
     let names = !result.names.length ? 'none' : result.names;
     if (Array.isArray(names))
-        names = names.map(f => path_1.basename(f).replace(path_1.extname(f), '')).join(', ');
+        names = names.map(f => utils_1.getBaseName(f)).join(', ');
     let message = result.message;
     let stack = '';
     if (message instanceof Error) {
@@ -137,6 +139,9 @@ function listen() {
         const mygra = new mygra_1.Mygra(userConfig);
         if (cmd === 'help') {
             console.log(help);
+        }
+        if (cmd === 'examples') {
+            console.log(examples);
         }
         else if (cmd === 'config') {
             console.log(config.props);
@@ -190,12 +195,13 @@ function listen() {
             console.log(`  Run ${utils_1.colorize(initCmd, 'cyan')} or ${utils_1.colorize(setCmd, 'cyan')}\n`);
         }
         else if (cmd === 'list') {
-            const files = yield mygra.getFilenames();
-            console.log(files.join('\n'));
+            let filenames = yield mygra.getFilenames();
+            filenames = filenames.map(file => utils_1.getBaseName(file));
+            console.log('\n' + filenames.join('\n') + '\n');
         }
         else if (cmd === 'show') {
             const files = yield mygra.getFilenames();
-            let found = utils_1.findIndex(files, argv._[1]);
+            const found = utils_1.findIndex(files, argv._[1]);
             if (found === -1) {
                 console.log(`Migration ${argv._[1]} NOT found`);
             }
@@ -203,19 +209,26 @@ function listen() {
                 const filename = files[found];
                 const imported = yield mygra.import(filename);
                 const parsed = path_1.parse(filename);
+                const hasMethod = argv.up || argv.down;
+                const showStates = {
+                    up: !hasMethod || argv.up,
+                    down: !hasMethod || argv.down
+                };
+                console.log(argv);
                 console.log(`\n----------------------------------------------`);
                 console.log(` ${utils_1.colorize(parsed.name, 'whiteBright')}`);
                 if (imported.description)
                     console.log(` ${utils_1.colorize(imported.description, 'dim')}`);
                 console.log(`----------------------------------------------\n`);
-                console.log(utils_1.colorize((imported.up || '').toString(), 'greenBright'));
-                console.log();
-                console.log(utils_1.colorize((imported.down || '').toString(), 'redBright'));
-                console.log();
+                if (showStates.up) {
+                    console.log(utils_1.colorize((imported.up || '').toString(), 'greenBright'));
+                    console.log();
+                }
+                if (showStates.down) {
+                    console.log(utils_1.colorize((imported.down || '').toString(), 'redBright'));
+                    console.log();
+                }
             }
-        }
-        else if (cmd === 'active') {
-            console.log(config.get('active'));
         }
         else if (cmd === 'create') {
             const { _, $0 } = argv, rest = __rest(argv, ["_", "$0"]);
@@ -262,8 +275,10 @@ function listen() {
     });
 }
 process.on('uncaughtException', (err) => {
-    console.error(log_symbols_1.default.error, utils_1.colorize((err.name || 'Error') + ': ' + err.message || 'Unknown', 'redBright'));
-    console.error(utils_1.colorize((err.stack || '').split('\n').slice(1).join('\n'), 'dim'));
+    const _err = utils_1.colorizeError(err);
+    console.log(_err.colorizedMessage);
+    console.log(_err.colorizedStack);
+    process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
     if (reason)

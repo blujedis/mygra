@@ -1,6 +1,7 @@
 import { existsSync, readFile, readFileSync, writeFile } from 'fs-extra';
 import { join, basename, extname } from 'path';
 import { homedir } from 'os';
+import symbols from 'log-symbols';
 import colors, { StylesType } from 'ansi-colors';
 import flatCache from 'flat-cache';
 import { IMigration, IMygraConfig, MigrateDirection } from './types';
@@ -215,7 +216,8 @@ export function isPromise<T = any>(value: unknown): value is Promise<T> {
  * @returns a tuple containing last migration and direction.
  */
 export function defineActive(migrations: IMigration[], dir: MigrateDirection) {
-  return [basename(migrations[migrations.length - 1].filename), dir] as [string, MigrateDirection];
+  const last = migrations[migrations.length - 1].filename;
+  return [getBaseName(last), dir] as [string, MigrateDirection];
 }
 
 /**
@@ -227,7 +229,32 @@ export function defineActive(migrations: IMigration[], dir: MigrateDirection) {
  */
 export function defineReverts(migrations: IMigration[], dir: MigrateDirection) {
   const clone = [...migrations].reverse(); // reverse so we traverse in opposite order.
-  const names = clone.map(file => basename(file.filename).replace(extname(file.filename), ''));
+  const names = clone.map(file => getBaseName(file.filename));
   // Don't flip direction here as mygra.revert() will do that automatically.
   return [names, dir] as [string[], MigrateDirection];
+}
+
+/**
+ * Makes errors more readable.
+ * 
+ * @param err the error to addd colorization to.
+ */
+export function colorizeError(err: Error) {
+  const _err = err as Error & { colorizedMessage: string, colorizedStack: string };
+  _err.colorizedMessage = symbols.error + ' ' + colorize((err.name || 'Error') + ': ' + err.message || 'Unknown', 'redBright');
+  _err.colorizedStack = colorize((err.stack || '').split('\n').slice(1).join('\n'), 'dim');
+  return _err;
+}
+
+/**
+ * Gets the base name of a file path with or without file extension.
+ * 
+ * @param filepath the full path to the file.
+ * @param includeExt when true the file extension is retained.
+ * @returns the filename only from the specified path.
+ */
+export function getBaseName(filepath: string, includeExt = false) {
+  filepath = basename(filepath);
+  if (includeExt) return filepath;
+  return filepath.replace(extname(filepath), '');
 }
