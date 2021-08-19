@@ -1,5 +1,5 @@
 /*!
- * Mygra v0.0.1
+ * Mygra v0.1.0
  * (c) Blujedi LLC <blujedicorp@gmail.com>
  * Released under the MIT License.
  */
@@ -3274,8 +3274,8 @@ class Mygra extends events.EventEmitter {
         name = Date.now() + '_' + baseName;
         const template = await this.getTemplate(options.template);
         const filename = require$$1.join(this.directory, 'migrations', name + this.extension);
-        options.up = options.up?.length ? "`" + options.up + "`" : options.up;
-        options.down = options.down?.length ? "`" + options.down + "`" : options.down;
+        options.up = options.up?.length ? "`" + options.up + "`" : "`" + "`";
+        options.down = options.down?.length ? "`" + options.down + "`" : "`" + "`";
         const writeResult = await writeFileAsync(filename, template({ ...options, name }));
         this.emit('created', { name, filename, ok: writeResult || false });
         return {

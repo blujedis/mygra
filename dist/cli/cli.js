@@ -214,7 +214,6 @@ function listen() {
                     up: !hasMethod || argv.up,
                     down: !hasMethod || argv.down
                 };
-                console.log(argv);
                 console.log(`\n----------------------------------------------`);
                 console.log(` ${utils_1.colorize(parsed.name, 'whiteBright')}`);
                 if (imported.description)
@@ -272,6 +271,7 @@ function listen() {
                 handleResult(result);
             }
         }
+        process.exit();
     });
 }
 process.on('uncaughtException', (err) => {

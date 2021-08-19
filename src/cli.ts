@@ -191,7 +191,6 @@ async function listen() {
         up: !hasMethod || argv.up,
         down: !hasMethod || argv.down
       };
-      console.log(argv);
       console.log(`\n----------------------------------------------`);
       console.log(` ${colorize(parsed.name, 'whiteBright')}`);
       if (imported.description)
@@ -258,6 +257,8 @@ async function listen() {
       handleResult(result);
     }
   }
+
+  process.exit();
 
 }
 

@@ -220,8 +220,8 @@ class Mygra extends events_1.EventEmitter {
             name = Date.now() + '_' + baseName;
             const template = yield this.getTemplate(options.template);
             const filename = path_1.join(this.directory, 'migrations', name + this.extension);
-            options.up = ((_a = options.up) === null || _a === void 0 ? void 0 : _a.length) ? "`" + options.up + "`" : options.up;
-            options.down = ((_b = options.down) === null || _b === void 0 ? void 0 : _b.length) ? "`" + options.down + "`" : options.down;
+            options.up = ((_a = options.up) === null || _a === void 0 ? void 0 : _a.length) ? "`" + options.up + "`" : "`" + "`";
+            options.down = ((_b = options.down) === null || _b === void 0 ? void 0 : _b.length) ? "`" + options.down + "`" : "`" + "`";
             const writeResult = yield utils_1.writeFileAsync(filename, template(Object.assign(Object.assign({}, options), { name })));
             this.emit('created', { name, filename, ok: writeResult || false });
             return {

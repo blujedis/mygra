@@ -12,7 +12,7 @@ npm install mygra -g
 
 ## Initialize
 
-Navigate to your porject and then initialize. You should then see a folder called **mygra** in the root of your project.
+Navigate to your project and then initialize. You should then see a folder called **mygra** in the root of your project.
 
 **NOTE** you can call this any time to reset or reinit it will not overwrite your `config.js` unless you call `mygra init --force`
 

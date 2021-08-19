@@ -242,8 +242,8 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
     const filename = join(this.directory, 'migrations', name + this.extension);
 
-    options.up = options.up?.length ? "`" + options.up + "`" : options.up;
-    options.down = options.down?.length ? "`" + options.down + "`" : options.down;
+    options.up = options.up?.length ? "`" + options.up + "`" : "`" + "`";
+    options.down = options.down?.length ? "`" + options.down + "`" : "`" + "`";
 
     const writeResult = await writeFileAsync(filename, template({ ...options, name }));
 
