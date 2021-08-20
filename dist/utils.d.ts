@@ -111,3 +111,4 @@ export declare function colorizeError(err: Error): Error & {
  * @returns the filename only from the specified path.
  */
 export declare function getBaseName(filepath: string, includeExt?: boolean): string;
+export declare function promisifyMigration(fn: (conn: any, cb?: (err?: Error, data?: any) => void) => any): (conn: any) => Promise<unknown>;

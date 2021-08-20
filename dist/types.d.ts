@@ -8,8 +8,8 @@ export interface IMigration<C extends ConnectionHandler = ConnectionHandler> {
     name: string;
     readonly description: string;
     readonly filename: string;
-    up: (conn: C) => Promise<void>;
-    down: (conn: C) => Promise<void>;
+    up: (conn: C) => Promise<any>;
+    down: (conn: C) => Promise<any>;
 }
 export interface IFilteredMigration {
     config: IMygra;
@@ -40,6 +40,8 @@ export interface IMigrationResult {
     ok: boolean;
     message: string | Error;
     count: number;
+    migrated?: IMigration[];
+    isPreview?: boolean;
 }
 export interface IMigrationCreateResult {
     ok: boolean;

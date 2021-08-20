@@ -4,7 +4,7 @@ import { join, basename, resolve, parse, extname } from 'path';
 import { existsSync } from 'fs';
 import defaultTemplates from './templates';
 import { promisify } from 'util';
-import { findIndex, writeFileAsync, initConfig, defineActive, defineReverts, colorizeError, getBaseName } from './utils';
+import { findIndex, writeFileAsync, initConfig, defineActive, defineReverts, colorizeError, getBaseName, promisifyMigration } from './utils';
 import { ConnectionHandler, CreateMigrationHandler, Events, IMigration, IMigrationCreateResult, IMigrationOptions, IMigrationResult, IMygra, MigrateDirection } from './types';
 
 const config = initConfig();
@@ -379,6 +379,63 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   }
 
   /**
+   * Iterates in series the migrations.
+   * 
+   * @param dir the direction of the migration
+   * @param files the file list being migration.
+   * @param migrations the loaded migrations.
+   * @returns IMigrationResult
+   */
+  async run(dir: MigrateDirection, migrations: IMigration[]) {
+
+    const migrated = [] as IMigration[];
+    let count = 0;
+
+    for (const [, file] of migrations.entries()) {
+      this.emit(dir, file);
+      const fn = promisifyMigration(file[dir]);
+      await fn(this.connection);
+      migrated.push(file);
+      count++;
+    }
+
+    return {
+      names: migrated.map(m => m.filename),
+      type: dir,
+      ok: count === migrated.length,
+      count,
+      migrated,
+    } as IMigrationResult;
+
+  }
+
+  /**
+   * Checks if is preview or filtered files are out of scope.
+   * 
+   * @param dir the direction of the migration.
+   * @param files the files to be migrated.
+   * @param preview indicates preview mode requested.
+   * @returns IMigrationResult.
+   */
+  checkPreviewAndScope(dir: MigrateDirection, migrations: IMigration[], preview = false) {
+
+    const message = preview
+      ? 'Migration Preview'
+      : `Migration out of scope, no files match request`;
+    const names = preview ? migrations.map(m => parse(m.filename).name) : [];
+    const count = migrations.length;
+
+    return {
+      type: dir,
+      ok: !preview && !migrations.length,
+      message,
+      count,
+      names
+    };
+
+  }
+
+  /**
    * Migrates up automatically or by level count or name of migration.
    * 
    * @param nameOrLevels the name or level count to migrate up.
@@ -389,8 +446,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
     let files: string[];
     let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
-    let count = 0;
-    const migrated = [] as IMigration[];
+    let migrated = [] as IMigration[];
 
     try {
 
@@ -399,70 +455,32 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       else
         files = await this.filter(nameOrLevels as string, 'up');
 
-      // If no files the requested migration
-      // is out of scope.
-      if (!files.length) {
-        result = {
-          type: 'up',
-          ok: false,
-          message: `Migration out of scope, no files match request`,
-          count,
-          names: []
-        }
-      }
+      files.sort() // ascending order.
+      const migrations = await this.load(files);
 
-      else if (preview) {
+      result = this.checkPreviewAndScope('up', migrations, preview);
 
-        result = {
-          type: 'up',
-          ok: true,
-          message: 'Migration preview',
-          count: files.length,
-          names: files.sort()
-        };
+      if (!result.count || result.isPreview)
+        return result;
 
-      }
+      const runResult = await this.run('up', migrations);
 
-      else {
+      result = {
+        ...runResult,
+        message: 'Migration successful'
+      };
 
-        files.sort() // ascending order.
-
-        const migrations = await this.load(files);
-
-        for (const [i, file] of migrations.entries()) {
-          const name = parse(files[i]).name;
-          this.emit('up', { name });
-          await promisify(file.up)(this.connection);
-          migrated.push(file);
-          count++;
-
-        }
-
-        result = {
-          type: 'up',
-          ok: true,
-          message: 'Migration successful',
-          count,
-          names: migrated.map(m => m.filename)
-        };
-
-      }
-
+      migrated = result.migrated || [];
 
     }
     catch (err) {
-
       if (migrated.length)
         await (this.revert(migrated, 'up'))
-
       result = {
-        type: 'up',
-        ok: false,
+        ...result,
         message: err,
-        count,
         names: migrated.map(m => m.filename)
       };
-
     }
 
     // Update the active migration when
@@ -489,8 +507,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
     let files: string[];
     let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
-    let count = 0;
-    const migrated = [] as IMigration[];
+    let migrated = [] as IMigration[];
 
     try {
 
@@ -499,63 +516,29 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       else
         files = await this.filter(nameOrLevels as string, 'down');
 
-      // If no files the requested migration
-      // is out of scope.
-      if (!files.length) {
+      const migrations = await this.load(files);
 
-        result = {
-          type: 'down',
-          ok: false,
-          message: `Migration out of scope, no files match request`,
-          count,
-          names: []
-        }
+      result = this.checkPreviewAndScope('up', migrations, preview);
 
-      }
+      if (!result.count || result.isPreview)
+        return result;
 
-      else if (preview) {
+      const runResult = await this.run('down', migrations);
 
-        result = {
-          type: 'up',
-          ok: true,
-          message: 'Migration preview',
-          count: files.length,
-          names: files
-        };
+      result = {
+        ...runResult,
+        message: 'Migration successful'
+      };
 
-      }
-
-      else {
-
-        const migrations = await this.load(files);
-
-        for (const [i, file] of migrations.entries()) {
-          const name = parse(files[i]).name;
-          this.emit('down', { name });
-          await promisify(file.down)(this.connection);
-          migrated.push(file);
-          count++;
-        }
-
-        result = {
-          type: 'down',
-          ok: true,
-          message: 'Migration successful',
-          count,
-          names: migrated.map(m => m.filename)
-        };
-
-      }
+      migrated = result.migrated || [];
 
     }
     catch (err) {
       if (migrated.length)
         await (this.revert(migrated, 'down'))
       result = {
-        type: 'down',
-        ok: false,
+        ...result,
         message: err,
-        count,
         names: migrated.map(m => m.filename)
       };
     }
@@ -587,12 +570,12 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     const clone = [...migrations];
     const newDir = dir === 'up' ? 'down' : 'up';
 
-    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
+    let result = { type: newDir, ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
     let revertNames = [] as string[];
     let last: IMigration;
     let name = '';
-    let count = 0;
-    const migrated = [] as IMigration[];
+
+    let migrated = [] as IMigration[];
 
     try {
 
@@ -616,64 +599,29 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       last = clone[clone.length - 1];
       name = getBaseName(last.filename);
 
-      if (!clone.length) {
+      result = this.checkPreviewAndScope('up', clone, preview);
 
-        result = {
-          type: newDir,
-          ok: false,
-          message: `Revert migration out of scope, no files match request`,
-          count: 0,
-          names: []
-        };
+      if (!result.count || result.isPreview)
+        return result;
 
-      }
-
-      else if (preview) {
-
-        result = {
-          type: 'up',
-          ok: true,
-          message: 'Migration preview',
-          count: migrations.length,
-          names: clone.map(file => file.filename)
-        };
-
-      }
-
-      else {
-
-        for (const file of migrations) {
-          if (dir === 'up') {
-            await promisify(file.down)(this.connection);
-          }
-          else {
-            await promisify(file.up)(this.connection);
-          }
-          migrated.push(file);
-          count++;
-        }
-
-        result = {
-          type: newDir,
-          ok: true,
-          message: 'Revert migration successful',
-          count,
-          names: migrated.map(m => m.filename)
-        };
-
-      }
-
-    }
-    catch (err) {
+      const runResult = await this.run(newDir, migrations);
 
       result = {
-        type: newDir,
-        ok: false,
+        ...runResult,
+        message: 'Revert Migration successful'
+      };
+
+      migrated = result.migrated || [];
+
+    }
+
+
+    catch (err) {
+      result = {
+        ...result,
         message: err,
-        count,
         names: migrated.map(m => m.filename)
       }
-
     }
 
     if (result.ok && migrated.length) {

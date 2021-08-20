@@ -258,3 +258,18 @@ export function getBaseName(filepath: string, includeExt = false) {
   if (includeExt) return filepath;
   return filepath.replace(extname(filepath), '');
 }
+
+export function promisifyMigration(fn: (conn: any, cb?: (err?: Error, data?: any) => void) => any) {
+  return (conn: any) => {
+    return new Promise((res, rej) => {
+      const prom = fn(conn, (err, data) => {
+        if (err)
+          return rej(err);
+        return res(data);
+      });
+      if (!isPromise(prom))
+        return prom;
+      return prom.then(res).catch(rej);
+    });
+  }
+}

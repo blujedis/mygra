@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getBaseName = exports.colorizeError = exports.defineReverts = exports.defineActive = exports.isPromise = exports.initConfig = exports.colorize = exports.readJSONSync = exports.writeFileAsync = exports.readFileAsync = exports.findIndex = exports.isMatch = exports.MYGRA_DEFAULTS = exports.MYGRA_CONFIG_PATH = exports.MYGRA_DEFAULT_PATH = exports.MYGRA_CONFIG_DIR = exports.APP_PKG = exports.PKG = void 0;
+exports.promisifyMigration = exports.getBaseName = exports.colorizeError = exports.defineReverts = exports.defineActive = exports.isPromise = exports.initConfig = exports.colorize = exports.readJSONSync = exports.writeFileAsync = exports.readFileAsync = exports.findIndex = exports.isMatch = exports.MYGRA_DEFAULTS = exports.MYGRA_CONFIG_PATH = exports.MYGRA_DEFAULT_PATH = exports.MYGRA_CONFIG_DIR = exports.APP_PKG = exports.PKG = void 0;
 const fs_extra_1 = require("fs-extra");
 const path_1 = require("path");
 const os_1 = require("os");
@@ -239,3 +239,18 @@ function getBaseName(filepath, includeExt = false) {
     return filepath.replace(path_1.extname(filepath), '');
 }
 exports.getBaseName = getBaseName;
+function promisifyMigration(fn) {
+    return (conn) => {
+        return new Promise((res, rej) => {
+            const prom = fn(conn, (err, data) => {
+                if (err)
+                    return rej(err);
+                return res(data);
+            });
+            if (!isPromise(prom))
+                return prom;
+            return prom.then(res).catch(rej);
+        });
+    };
+}
+exports.promisifyMigration = promisifyMigration;
