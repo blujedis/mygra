@@ -40,11 +40,13 @@ export interface IMygra<C extends ConnectionHandler = ConnectionHandler> extends
     events?: Events;
 }
 export interface IMigrationResult {
-    names: string[];
-    type: MigrateDirection;
+    names?: string[];
+    type?: MigrateDirection;
     ok: boolean;
     message: string | Error;
     count: number;
+    success?: number;
+    failed?: number;
     migrated?: IMigration[];
     isPreview?: boolean;
 }

@@ -145,7 +145,20 @@ function handleResult(result) {
     if (result.names)
         console.log(`  migrations: ${names}`);
     if (typeof result.count !== 'undefined')
-        console.log(`  count: ${result.count}\n`);
+        console.log(`  count: ${result.count}`);
+    if (typeof result.success !== 'undefined') {
+        const success = typeof result.failed !== 'undefined' && result.failed > 0
+            ? result.success
+            : utils_1.colorize(result.success + '', 'greenBright');
+        console.log(`  success: ${success}`);
+    }
+    if (typeof result.failed !== 'undefined') {
+        const failed = result.failed > 0
+            ? utils_1.colorize(result.failed + '', 'redBright')
+            : result.failed;
+        console.log(`  failed: ${failed}`);
+    }
+    console.log();
     exit();
 }
 function listen() {

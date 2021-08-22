@@ -347,34 +347,6 @@ class Mygra extends events_1.EventEmitter {
         });
     }
     /**
-     * Iterates in series the migrations.
-     *
-     * @param dir the direction of the migration
-     * @param files the file list being migration.
-     * @param migrations the loaded migrations.
-     * @returns IMigrationResult
-     */
-    run(dir, migrations) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const migrated = [];
-            let count = 0;
-            for (const [, file] of migrations.entries()) {
-                this.emit(dir, file);
-                const fn = utils_1.promisifyMigration(file[dir]);
-                yield fn(this.connection);
-                migrated.push(file);
-                count++;
-            }
-            return {
-                names: migrated.map(m => m.filename),
-                type: dir,
-                ok: count === migrated.length,
-                count,
-                migrated,
-            };
-        });
-    }
-    /**
      * Checks if is preview or filtered files are out of scope.
      *
      * @param dir the direction of the migration.
@@ -393,10 +365,38 @@ class Mygra extends events_1.EventEmitter {
             ok: !!migrations.length,
             message,
             count,
+            success: 0,
+            failed: 0,
             names,
             isPreview: preview
         };
     }
+    // /**
+    //  * Iterates in series the migrations.
+    //  * 
+    //  * @param dir the direction of the migration
+    //  * @param files the file list being migration.
+    //  * @param migrations the loaded migrations.
+    //  * @returns IMigrationResult
+    //  */
+    // async run(dir: MigrateDirection, migrations: IMigration[]) {
+    //   const migrated = [] as IMigration[];
+    //   let count = 0;
+    //   for (const [, file] of migrations.entries()) {
+    //     this.emit(dir, file);
+    //     const fn = promisifyMigration(file[dir]);
+    //     await fn(this.connection);
+    //     count += 1;
+    //     migrated.push(file);
+    //   }
+    //   return {
+    //     names: migrated.map(m => m.filename),
+    //     type: dir,
+    //     ok: count === migrated.length,
+    //     count,
+    //     migrated,
+    //   } as IMigrationResult;
+    // }
     /**
      * Migrates up automatically or by level count or name of migration.
      *
@@ -407,8 +407,10 @@ class Mygra extends events_1.EventEmitter {
     up(nameOrLevels, preview = false) {
         return __awaiter(this, void 0, void 0, function* () {
             let files;
-            let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] };
-            let migrated = [];
+            let result = { type: 'up', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] };
+            let count = 0;
+            let success = 0;
+            const migrated = [];
             try {
                 if (typeof nameOrLevels === 'number' || nameOrLevels === '*')
                     files = yield this.filter('up', nameOrLevels);
@@ -416,17 +418,32 @@ class Mygra extends events_1.EventEmitter {
                     files = yield this.filter(nameOrLevels, 'up');
                 files.sort(); // ascending order.
                 const migrations = yield this.load(files);
+                count = migrations.length;
                 result = this.checkPreviewAndScope('up', migrations, preview);
                 if (!result.ok || result.isPreview)
                     return result;
-                const runResult = yield this.run('up', migrations);
-                result = Object.assign(Object.assign({}, runResult), { message: 'Migration successful' });
-                migrated = result.migrated || [];
+                for (const [, file] of migrations.entries()) {
+                    this.emit('up', file);
+                    const fn = utils_1.promisifyMigration(file['up']);
+                    yield fn(this.connection)
+                        .then(_ => {
+                        success += 1;
+                        migrated.push(file);
+                    });
+                }
+                result.ok = count === success;
             }
             catch (err) {
                 if (migrated.length)
                     yield (this.revert(migrated, 'up'));
-                result = Object.assign(Object.assign({}, result), { message: err, names: migrated.map(m => m.filename) });
+                result = Object.assign(Object.assign({}, result), { ok: false, message: err, names: migrated.map(m => m.filename) });
+            }
+            result.count = count;
+            result.success = success;
+            result.failed = Math.max(0, count - success);
+            if (result.ok) {
+                result.message = `Migration up successful`;
+                result.names = migrated.map(m => m.filename);
             }
             // Update the active migration when
             // result status is ok store last migration run.
@@ -448,25 +465,42 @@ class Mygra extends events_1.EventEmitter {
     down(nameOrLevels, preview = false) {
         return __awaiter(this, void 0, void 0, function* () {
             let files;
-            let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] };
-            let migrated = [];
+            let result = { type: 'up', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] };
+            let count = 0;
+            let success = 0;
+            const migrated = [];
             try {
                 if (typeof nameOrLevels === 'number' || nameOrLevels === '*')
                     files = yield this.filter('down', nameOrLevels);
                 else
                     files = yield this.filter(nameOrLevels, 'down');
                 const migrations = yield this.load(files);
+                count = migrations.length;
                 result = this.checkPreviewAndScope('up', migrations, preview);
                 if (!result.ok || result.isPreview)
                     return result;
-                const runResult = yield this.run('down', migrations);
-                result = Object.assign(Object.assign({}, runResult), { message: 'Migration successful' });
-                migrated = result.migrated || [];
+                for (const [, file] of migrations.entries()) {
+                    this.emit('down', file);
+                    const fn = utils_1.promisifyMigration(file['down']);
+                    yield fn(this.connection)
+                        .then(_ => {
+                        success += 1;
+                        migrated.push(file);
+                    });
+                }
+                result.ok = count === success;
             }
             catch (err) {
                 if (migrated.length)
                     yield (this.revert(migrated, 'down'));
-                result = Object.assign(Object.assign({}, result), { message: err, names: migrated.map(m => m.filename) });
+                result = Object.assign(Object.assign({}, result), { ok: false, message: err, names: migrated.map(m => m.filename) });
+            }
+            result.count = count;
+            result.success = success;
+            result.failed = Math.max(0, count - success);
+            if (result.ok) {
+                result.message = `Migration down successful`;
+                result.names = migrated.map(m => m.filename);
             }
             // Update the active migration when
             // result status is ok store last migration run.
@@ -491,11 +525,13 @@ class Mygra extends events_1.EventEmitter {
         return __awaiter(this, void 0, void 0, function* () {
             const clone = [...migrations];
             const newDir = dir === 'up' ? 'down' : 'up';
-            let result = { type: newDir, ok: false, message: 'Unknown', count: 0, names: [] };
+            let result = { type: newDir, ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] };
             let revertNames = [];
             let last;
             let name = '';
-            let migrated = [];
+            const count = migrations.length;
+            let success = 0;
+            const migrated = [];
             try {
                 // Ensure migrations are in correct order
                 // using timestamped filenames.
@@ -517,12 +553,26 @@ class Mygra extends events_1.EventEmitter {
                 result = this.checkPreviewAndScope('up', clone, preview);
                 if (!result.count || result.isPreview)
                     return result;
-                const runResult = yield this.run(newDir, migrations);
-                result = Object.assign(Object.assign({}, runResult), { message: 'Revert Migration successful' });
-                migrated = result.migrated || [];
+                for (const [, file] of migrations.entries()) {
+                    this.emit(newDir, file);
+                    const fn = utils_1.promisifyMigration(file[newDir]);
+                    yield fn(this.connection)
+                        .then(_ => {
+                        success += 1;
+                        migrated.push(file);
+                    });
+                }
+                result.ok = count === success;
             }
             catch (err) {
-                result = Object.assign(Object.assign({}, result), { message: err, names: migrated.map(m => m.filename) });
+                result = Object.assign(Object.assign({}, result), { ok: false, message: err, names: migrated.map(m => m.filename) });
+            }
+            result.count = count;
+            result.success = success;
+            result.failed = Math.max(0, count - success);
+            if (result.ok) {
+                result.message = `Revert Migration ${newDir} successful`;
+                result.names = migrated.map(m => m.filename);
             }
             if (result.ok && migrated.length) {
                 this.reverts = [revertNames, newDir];
@@ -539,58 +589,44 @@ class Mygra extends events_1.EventEmitter {
      */
     reset(preview = false) {
         return __awaiter(this, void 0, void 0, function* () {
-            let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] };
+            let result = { type: 'down', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] };
             let count = 0;
+            let success = 0;
             const migrated = [];
             try {
                 const files = yield this.filter('down', '*');
                 const migrations = yield this.load(files);
+                count = migrations.length;
                 if (!files.length) {
-                    result = {
-                        type: 'down',
-                        ok: false,
-                        message: `Migration out of scope, no files match request`,
-                        count,
-                        names: migrated.map(m => m.filename)
-                    };
+                    return Object.assign(Object.assign({}, result), { message: `Migration out of scope, no files match request`, count, names: migrated.map(m => m.filename) });
                 }
                 else if (preview) {
-                    result = {
-                        type: 'up',
-                        ok: true,
-                        message: 'Migration preview',
-                        count: files.length,
-                        names: files
-                    };
+                    return Object.assign(Object.assign({}, result), { ok: true, message: 'Migration preview', count: files.length, names: files });
                 }
                 else {
                     for (const [i, file] of migrations.entries()) {
                         const name = path_1.parse(files[i]).name;
                         this.emit('down', { name, revert: true });
-                        yield util_1.promisify(file.down)(this.connection);
-                        migrated.push(file);
-                        count++;
+                        yield util_1.promisify(file.down)(this.connection)
+                            .then(_ => {
+                            migrated.push(file);
+                            success += 1;
+                        });
                     }
-                    result = {
-                        type: 'down',
-                        ok: false,
-                        message: 'Migration successful',
-                        count,
-                        names: migrated.map(m => m.filename)
-                    };
+                    result.ok = count === success;
                 }
             }
             catch (err) {
                 if (migrated.length)
                     yield (this.revert(migrated, 'down'));
-                result = {
-                    type: 'down',
-                    ok: false,
-                    message: err,
-                    count,
-                    names: migrated.map(m => m.filename)
-                };
+                result = Object.assign(Object.assign({}, result), { ok: false, message: err, count });
             }
+            result.count = count;
+            result.success = success;
+            result.failed = Math.max(0, count - success);
+            result.names = migrated.map(m => m.filename);
+            if (result.ok)
+                result.message = `Migration reset successful`;
             // Update the active migration when
             // result status is ok store last migration run.
             if (result.ok && migrated.length) {

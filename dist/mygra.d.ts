@@ -124,15 +124,6 @@ export declare class Mygra<C extends ConnectionHandler = ConnectionHandler> exte
      */
     load(filenames: string[]): Promise<IMigration<ConnectionHandler>[]>;
     /**
-     * Iterates in series the migrations.
-     *
-     * @param dir the direction of the migration
-     * @param files the file list being migration.
-     * @param migrations the loaded migrations.
-     * @returns IMigrationResult
-     */
-    run(dir: MigrateDirection, migrations: IMigration[]): Promise<IMigrationResult>;
-    /**
      * Checks if is preview or filtered files are out of scope.
      *
      * @param dir the direction of the migration.
@@ -145,6 +136,8 @@ export declare class Mygra<C extends ConnectionHandler = ConnectionHandler> exte
         ok: boolean;
         message: string;
         count: number;
+        success: number;
+        failed: number;
         names: string[];
         isPreview: boolean;
     };

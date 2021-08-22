@@ -416,37 +416,6 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   }
 
   /**
-   * Iterates in series the migrations.
-   * 
-   * @param dir the direction of the migration
-   * @param files the file list being migration.
-   * @param migrations the loaded migrations.
-   * @returns IMigrationResult
-   */
-  async run(dir: MigrateDirection, migrations: IMigration[]) {
-
-    const migrated = [] as IMigration[];
-    let count = 0;
-
-    for (const [, file] of migrations.entries()) {
-      this.emit(dir, file);
-      const fn = promisifyMigration(file[dir]);
-      await fn(this.connection);
-      migrated.push(file);
-      count++;
-    }
-
-    return {
-      names: migrated.map(m => m.filename),
-      type: dir,
-      ok: count === migrated.length,
-      count,
-      migrated,
-    } as IMigrationResult;
-
-  }
-
-  /**
    * Checks if is preview or filtered files are out of scope.
    * 
    * @param dir the direction of the migration.
@@ -467,11 +436,45 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       ok: !!migrations.length,
       message,
       count,
+      success: 0,
+      failed: 0,
       names,
       isPreview: preview
     };
 
   }
+
+  // /**
+  //  * Iterates in series the migrations.
+  //  * 
+  //  * @param dir the direction of the migration
+  //  * @param files the file list being migration.
+  //  * @param migrations the loaded migrations.
+  //  * @returns IMigrationResult
+  //  */
+  // async run(dir: MigrateDirection, migrations: IMigration[]) {
+
+  //   const migrated = [] as IMigration[];
+  //   let count = 0;
+
+  //   for (const [, file] of migrations.entries()) {
+  //     this.emit(dir, file);
+  //     const fn = promisifyMigration(file[dir]);
+  //     await fn(this.connection);
+  //     count += 1;
+  //     migrated.push(file);
+  //   }
+
+  //   return {
+  //     names: migrated.map(m => m.filename),
+  //     type: dir,
+  //     ok: count === migrated.length,
+  //     count,
+  //     migrated,
+  //   } as IMigrationResult;
+
+
+  // }
 
   /**
    * Migrates up automatically or by level count or name of migration.
@@ -483,8 +486,10 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   async up(nameOrLevels?: string | number, preview = false) {
 
     let files: string[];
-    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
-    let migrated = [] as IMigration[];
+    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] } as IMigrationResult;
+    let count = 0;
+    let success = 0;
+    const migrated = [] as IMigration[];
 
     try {
 
@@ -495,30 +500,46 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       files.sort() // ascending order.
       const migrations = await this.load(files);
+      count = migrations.length;
 
       result = this.checkPreviewAndScope('up', migrations, preview);
 
       if (!result.ok || result.isPreview)
         return result;
 
-      const runResult = await this.run('up', migrations);
+      for (const [, file] of migrations.entries()) {
+        this.emit('up', file);
+        const fn = promisifyMigration(file['up']);
+        await fn(this.connection)
+          .then(_ => {
+            success += 1;
+            migrated.push(file);
+          });
 
-      result = {
-        ...runResult,
-        message: 'Migration successful'
-      };
+      }
 
-      migrated = result.migrated || [];
+     
+      result.ok = count === success;
 
     }
     catch (err) {
       if (migrated.length)
-        await (this.revert(migrated, 'up'))
+        await (this.revert(migrated, 'up'));
       result = {
         ...result,
+        ok: false,
         message: err,
         names: migrated.map(m => m.filename)
       };
+    }
+
+    result.count = count;
+    result.success = success;
+    result.failed = Math.max(0, count - success);
+
+    if (result.ok) {
+      result.message = `Migration up successful`;
+      result.names = migrated.map(m => m.filename)
     }
 
     // Update the active migration when
@@ -544,8 +565,10 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   async down(nameOrLevels?: string | number, preview = false) {
 
     let files: string[];
-    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
-    let migrated = [] as IMigration[];
+    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] } as IMigrationResult;
+    let count = 0;
+    let success = 0;
+    const migrated = [] as IMigration[];
 
     try {
 
@@ -556,19 +579,25 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       const migrations = await this.load(files);
 
+      count = migrations.length;
+
       result = this.checkPreviewAndScope('up', migrations, preview);
 
       if (!result.ok || result.isPreview)
         return result;
 
-      const runResult = await this.run('down', migrations);
+      for (const [, file] of migrations.entries()) {
+        this.emit('down', file);
+        const fn = promisifyMigration(file['down']);
+        await fn(this.connection)
+          .then(_ => {
+            success += 1;
+            migrated.push(file);
+          });
+      }
 
-      result = {
-        ...runResult,
-        message: 'Migration successful'
-      };
-
-      migrated = result.migrated || [];
+      
+      result.ok = count === success;
 
     }
     catch (err) {
@@ -576,9 +605,19 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
         await (this.revert(migrated, 'down'))
       result = {
         ...result,
+        ok: false,
         message: err,
         names: migrated.map(m => m.filename)
       };
+    }
+
+    result.count = count;
+    result.success = success;
+    result.failed = Math.max(0, count - success);
+
+    if (result.ok) {
+      result.message = `Migration down successful`;
+      result.names = migrated.map(m => m.filename)
     }
 
     // Update the active migration when
@@ -608,12 +647,14 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     const clone = [...migrations];
     const newDir = dir === 'up' ? 'down' : 'up';
 
-    let result = { type: newDir, ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
+    let result = { type: newDir, ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] } as IMigrationResult;
     let revertNames = [] as string[];
     let last: IMigration;
     let name = '';
 
-    let migrated = [] as IMigration[];
+    const count = migrations.length;
+    let success = 0;
+    const migrated = [] as IMigration[];
 
     try {
 
@@ -642,24 +683,36 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       if (!result.count || result.isPreview)
         return result;
 
-      const runResult = await this.run(newDir, migrations);
+      for (const [, file] of migrations.entries()) {
+        this.emit(newDir, file);
+        const fn = promisifyMigration(file[newDir]);
+        await fn(this.connection)
+          .then(_ => {
+            success += 1;
+            migrated.push(file);
+          });
+      }
 
-      result = {
-        ...runResult,
-        message: 'Revert Migration successful'
-      };
-
-      migrated = result.migrated || [];
+      result.ok = count === success;
 
     }
-
 
     catch (err) {
       result = {
         ...result,
+        ok: false,
         message: err,
         names: migrated.map(m => m.filename)
       }
+    }
+
+    result.count = count;
+    result.success = success;
+    result.failed = Math.max(0, count - success);
+
+    if (result.ok) {
+      result.message = `Revert Migration ${newDir} successful`;
+      result.names = migrated.map(m => m.filename)
     }
 
     if (result.ok && migrated.length) {
@@ -680,8 +733,9 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
    */
   async reset(preview = false) {
 
-    let result = { type: 'up', ok: false, message: 'Unknown', count: 0, names: [] } as IMigrationResult;
+    let result = { type: 'down', ok: false, message: 'Unknown', count: 0, success: 0, failed: 0, names: [] } as IMigrationResult;
     let count = 0;
+    let success = 0;
     const migrated = [] as IMigration[];
 
     try {
@@ -689,11 +743,12 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       const files = await this.filter('down', '*');
       const migrations = await this.load(files);
 
+      count = migrations.length;
+
       if (!files.length) {
 
-        result = {
-          type: 'down',
-          ok: false,
+        return {
+          ...result,
           message: `Migration out of scope, no files match request`,
           count,
           names: migrated.map(m => m.filename)
@@ -703,8 +758,8 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       else if (preview) {
 
-        result = {
-          type: 'up',
+        return {
+          ...result,
           ok: true,
           message: 'Migration preview',
           count: files.length,
@@ -718,18 +773,15 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
         for (const [i, file] of migrations.entries()) {
           const name = parse(files[i]).name;
           this.emit('down', { name, revert: true });
-          await promisify(file.down)(this.connection);
-          migrated.push(file);
-          count++
+          await promisify(file.down)(this.connection)
+            .then(_ => {
+              migrated.push(file);
+              success += 1;
+            });
+
         }
 
-        result = {
-          type: 'down',
-          ok: false,
-          message: 'Migration successful',
-          count,
-          names: migrated.map(m => m.filename)
-        };
+        result.ok = count === success;
 
       }
 
@@ -739,14 +791,21 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       if (migrated.length)
         await (this.revert(migrated, 'down'))
       result = {
-        type: 'down',
+        ...result,
         ok: false,
         message: err,
-        count,
-        names: migrated.map(m => m.filename)
+        count
       };
     }
 
+    result.count = count;
+    result.success = success;
+    result.failed = Math.max(0, count - success);
+    result.names = migrated.map(m => m.filename);
+
+    if (result.ok) 
+      result.message = `Migration reset successful`;
+    
     // Update the active migration when
     // result status is ok store last migration run.
     if (result.ok && migrated.length) {
