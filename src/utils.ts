@@ -20,7 +20,8 @@ export const MYGRA_DEFAULTS: IMygraConfig = {
   directory: MYGRA_DEFAULT_PATH,
   active: [] as any,
   reverts: [] as any,
-  extension: '.js'
+  extension: '.js',
+  templatePrefix: true
 };
 
 /**

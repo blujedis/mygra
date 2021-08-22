@@ -23,7 +23,8 @@ exports.MYGRA_DEFAULTS = {
     directory: exports.MYGRA_DEFAULT_PATH,
     active: [],
     reverts: [],
-    extension: '.js'
+    extension: '.js',
+    templatePrefix: true
 };
 /**
  * Inspects a string matching by supplied pattern.

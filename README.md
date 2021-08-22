@@ -205,6 +205,14 @@ We're huge fans of Typescript, however in this case we decided to leave transpil
 
 If interested in tinkering with this using ts-node for example feel free to do so and make a PR!!!
 
+## Ran Migration but Nothing Happens
+
+If your database connection is failing you may see this behavior. Admittedly we need to spend some more time handling errors of this type and perhaps require a database connectivity check method be exported from `mygra/config.js`.
+
+Simply run `node mygra/config.js` directly using Node where some sort of connectivity check is defined in your config.
+
+Once successfully connecting Mygra should catch errors as you'd expect.
+
 ## More Help
 
 From your terminal run the help command which will show all options as well as a few command line examples.

@@ -172,7 +172,8 @@ class Mygra extends events_1.EventEmitter {
     isUniqueName(name) {
         return __awaiter(this, void 0, void 0, function* () {
             const filenames = yield this.getFilenames();
-            const found = utils_1.findIndex(filenames, name);
+            const stripped = filenames.map(v => path_1.parse(v).name.replace(/^\d+_/, ''));
+            const found = stripped.findIndex(v => v.indexOf(name));
             return found === -1;
         });
     }
@@ -198,6 +199,20 @@ class Mygra extends events_1.EventEmitter {
             });
         });
     }
+    /**
+     * Checks if the current active migration is the first migration
+     * and has a current migration direction of down.
+     *
+     * @param files the filenames to be inspected.
+     * @param active the active migration.
+     * @returns a boolean indicating if is first migration.
+     */
+    isFirstMigration(files, active) {
+        const clone = [...files].sort();
+        const [name, dir] = active;
+        const idx = clone.findIndex(v => v.indexOf(name) !== -1);
+        return idx === 0 && dir === 'down';
+    }
     create(nameOrOptions, options) {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
@@ -206,10 +221,17 @@ class Mygra extends events_1.EventEmitter {
                 options = nameOrOptions;
                 name = undefined;
             }
-            options = Object.assign({ name, description: '', up: '', down: '' }, options);
+            options = Object.assign({ up: '', down: '' }, options);
             if (!options.name)
                 throw new Error(`Cannot create migration with name of undefined.`);
-            const baseName = options.name.replace(/\s/g, '_').toLowerCase();
+            let baseName = options.name.replace(/\s/g, '_').toLowerCase();
+            options.table = options.table || baseName;
+            // Check if should prefix name with the template
+            // name, for ex: generate:create user_table will
+            // become create_user_table.
+            baseName = this.options.templatePrefix
+                ? options.template + '_' + baseName
+                : baseName;
             const isUnique = yield this.isUniqueName(baseName);
             if (!isUnique)
                 return {
@@ -218,20 +240,30 @@ class Mygra extends events_1.EventEmitter {
                     message: `Cannot create duplicate migration name: "${baseName}"`
                 };
             name = Date.now() + '_' + baseName;
-            const template = yield this.getTemplate(options.template);
             const filename = path_1.join(this.directory, 'migrations', name + this.extension);
-            options.up = ((_a = options.up) === null || _a === void 0 ? void 0 : _a.length) ? "`" + options.up + "`" : "`" + "`";
-            options.down = ((_b = options.down) === null || _b === void 0 ? void 0 : _b.length) ? "`" + options.down + "`" : "`" + "`";
-            const writeResult = yield utils_1.writeFileAsync(filename, template(Object.assign(Object.assign({}, options), { name })));
-            this.emit('created', { name, filename, ok: writeResult || false });
-            return {
-                ok: writeResult || false,
-                name,
-                message: writeResult === true
-                    ? ` Migration "${name}" succesfully created`
-                    : ` Migration "${name}" was NOT created`,
-                filename
-            };
+            try {
+                const template = yield this.getTemplate(options.template);
+                options.up = ((_a = options.up) === null || _a === void 0 ? void 0 : _a.length) ? "`" + options.up + "`" : "`" + "`";
+                options.down = ((_b = options.down) === null || _b === void 0 ? void 0 : _b.length) ? "`" + options.down + "`" : "`" + "`";
+                const writeResult = yield utils_1.writeFileAsync(filename, template(Object.assign(Object.assign({}, options), { name: baseName })));
+                this.emit('created', { name, filename, ok: writeResult || false });
+                return {
+                    ok: writeResult || false,
+                    name,
+                    message: writeResult === true
+                        ? ` Migration "${name}" succesfully created`
+                        : ` Migration "${name}" was NOT created`,
+                    filename
+                };
+            }
+            catch (err) {
+                return {
+                    ok: false,
+                    name,
+                    message: err,
+                    filename
+                };
+            }
         });
     }
     filter(nameOrDir, dirOrLevels) {
@@ -252,12 +284,13 @@ class Mygra extends events_1.EventEmitter {
             levels = levels || 1;
             const [active, activeDir] = this.active;
             const files = yield this.getFilenames();
+            const isFirst = this.isFirstMigration(files, this.active);
             const idx = utils_1.findIndex(files, name);
             // used to shift index depending on last
             // active direction of migration.
             const offset = activeDir === 'down' ? 1 : 0;
             let lastIdx = utils_1.findIndex(files, active);
-            lastIdx = !active ? files.length : lastIdx;
+            lastIdx = !active || isFirst ? files.length : lastIdx;
             let filtered = files;
             if (name && idx === -1)
                 throw new Error(`Migration ${name} required but not found.`);
@@ -357,10 +390,11 @@ class Mygra extends events_1.EventEmitter {
         const count = migrations.length;
         return {
             type: dir,
-            ok: !preview && !migrations.length,
+            ok: !!migrations.length,
             message,
             count,
-            names
+            names,
+            isPreview: preview
         };
     }
     /**
@@ -383,7 +417,7 @@ class Mygra extends events_1.EventEmitter {
                 files.sort(); // ascending order.
                 const migrations = yield this.load(files);
                 result = this.checkPreviewAndScope('up', migrations, preview);
-                if (!result.count || result.isPreview)
+                if (!result.ok || result.isPreview)
                     return result;
                 const runResult = yield this.run('up', migrations);
                 result = Object.assign(Object.assign({}, runResult), { message: 'Migration successful' });
@@ -423,7 +457,7 @@ class Mygra extends events_1.EventEmitter {
                     files = yield this.filter(nameOrLevels, 'down');
                 const migrations = yield this.load(files);
                 result = this.checkPreviewAndScope('up', migrations, preview);
-                if (!result.count || result.isPreview)
+                if (!result.ok || result.isPreview)
                     return result;
                 const runResult = yield this.run('down', migrations);
                 result = Object.assign(Object.assign({}, runResult), { message: 'Migration successful' });

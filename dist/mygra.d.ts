@@ -64,6 +64,15 @@ export declare class Mygra<C extends ConnectionHandler = ConnectionHandler> exte
      */
     duplicateNames(): Promise<string[]>;
     /**
+     * Checks if the current active migration is the first migration
+     * and has a current migration direction of down.
+     *
+     * @param files the filenames to be inspected.
+     * @param active the active migration.
+     * @returns a boolean indicating if is first migration.
+     */
+    isFirstMigration(files: string[], active: [string, string]): boolean;
+    /**
      * Creates new migration.
      *
      * @param name the name of the migration to create.
@@ -137,6 +146,7 @@ export declare class Mygra<C extends ConnectionHandler = ConnectionHandler> exte
         message: string;
         count: number;
         names: string[];
+        isPreview: boolean;
     };
     /**
      * Migrates up automatically or by level count or name of migration.

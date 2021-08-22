@@ -164,7 +164,8 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
    */
   async isUniqueName(name: string) {
     const filenames = await this.getFilenames();
-    const found = findIndex(filenames, name);
+    const stripped = filenames.map(v => parse(v).name.replace(/^\d+_/, ''));
+    const found = stripped.findIndex(v => v.indexOf(name));
     return found === -1;
   }
 
@@ -187,6 +188,21 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       found.push(v);
       return isDupe;
     });
+  }
+
+  /**
+   * Checks if the current active migration is the first migration
+   * and has a current migration direction of down.
+   * 
+   * @param files the filenames to be inspected.
+   * @param active the active migration. 
+   * @returns a boolean indicating if is first migration.
+   */
+  isFirstMigration(files: string[], active: [string, string]) {
+    const clone = [...files].sort();
+    const [name, dir] = active;
+    const idx = clone.findIndex(v => v.indexOf(name) !== -1);
+    return idx === 0 && dir === 'down';
   }
 
   /**
@@ -215,18 +231,23 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     }
 
     options = {
-      name,
-      description: '',
       up: '',
       down: '',
       ...options
     } as Required<IMigrationOptions>;
 
-
     if (!options.name)
       throw new Error(`Cannot create migration with name of undefined.`);
 
-    const baseName = options.name.replace(/\s/g, '_').toLowerCase();
+    let baseName = options.name.replace(/\s/g, '_').toLowerCase();
+    options.table = options.table || baseName;
+
+    // Check if should prefix name with the template
+    // name, for ex: generate:create user_table will
+    // become create_user_table.
+    baseName = this.options.templatePrefix
+      ? options.template + '_' + baseName
+      : baseName;
 
     const isUnique = await this.isUniqueName(baseName);
 
@@ -238,25 +259,40 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       } as IMigrationCreateResult;
 
     name = Date.now() + '_' + baseName;
-    const template = await this.getTemplate(options.template);
-
     const filename = join(this.directory, 'migrations', name + this.extension);
 
-    options.up = options.up?.length ? "`" + options.up + "`" : "`" + "`";
-    options.down = options.down?.length ? "`" + options.down + "`" : "`" + "`";
+    try {
 
-    const writeResult = await writeFileAsync(filename, template({ ...options, name }));
+      const template = await this.getTemplate(options.template);
 
-    this.emit('created', { name, filename, ok: writeResult || false });
+      options.up = options.up?.length ? "`" + options.up + "`" : "`" + "`";
+      options.down = options.down?.length ? "`" + options.down + "`" : "`" + "`";
 
-    return {
-      ok: writeResult || false,
-      name,
-      message: writeResult === true
-        ? ` Migration "${name}" succesfully created`
-        : ` Migration "${name}" was NOT created`,
-      filename
-    } as IMigrationCreateResult;
+      const writeResult = await writeFileAsync(filename, template({ ...options, name: baseName }));
+
+      this.emit('created', { name, filename, ok: writeResult || false });
+
+      return {
+        ok: writeResult || false,
+        name,
+        message: writeResult === true
+          ? ` Migration "${name}" succesfully created`
+          : ` Migration "${name}" was NOT created`,
+        filename
+      } as IMigrationCreateResult;
+
+    }
+
+    catch (err) {
+
+      return {
+        ok: false,
+        name,
+        message: err,
+        filename
+      } as IMigrationCreateResult;
+
+    }
 
   }
 
@@ -305,6 +341,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
     const [active, activeDir] = this.active;
     const files = await this.getFilenames();
+    const isFirst = this.isFirstMigration(files, this.active);
     const idx = findIndex(files, name as string);
 
     // used to shift index depending on last
@@ -312,7 +349,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     const offset = activeDir === 'down' ? 1 : 0;
 
     let lastIdx = findIndex(files, active);
-    lastIdx = !active ? files.length : lastIdx;
+    lastIdx = !active || isFirst ? files.length : lastIdx;
 
     let filtered = files;
 
@@ -427,10 +464,11 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
     return {
       type: dir,
-      ok: !preview && !migrations.length,
+      ok: !!migrations.length,
       message,
       count,
-      names
+      names,
+      isPreview: preview
     };
 
   }
@@ -460,7 +498,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       result = this.checkPreviewAndScope('up', migrations, preview);
 
-      if (!result.count || result.isPreview)
+      if (!result.ok || result.isPreview)
         return result;
 
       const runResult = await this.run('up', migrations);
@@ -520,7 +558,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       result = this.checkPreviewAndScope('up', migrations, preview);
 
-      if (!result.count || result.isPreview)
+      if (!result.ok || result.isPreview)
         return result;
 
       const runResult = await this.run('down', migrations);

@@ -16,11 +16,15 @@ export interface IFilteredMigration {
     files: string[];
 }
 export interface IMigrationOptions {
-    name?: string;
+    readonly name?: string;
     description?: string;
     template?: string;
+    table?: string;
+    defaults?: boolean;
+    columns?: string[];
     up?: string;
     down?: string;
+    [key: string]: any;
 }
 export interface IMygraConfig {
     readonly initialized: boolean;
@@ -28,6 +32,7 @@ export interface IMygraConfig {
     active: [string, MigrateDirection];
     reverts: [string[], MigrateDirection];
     extension: string;
+    templatePrefix: boolean;
 }
 export interface IMygra<C extends ConnectionHandler = ConnectionHandler> extends IMygraConfig {
     templates?: Record<string, CreateMigrationHandler>;

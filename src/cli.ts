@@ -7,16 +7,33 @@ import { colorize, MYGRA_DEFAULT_PATH, initConfig, PKG, APP_PKG, findIndex, colo
 import { IMigrationResult, IMygra } from './types';
 
 const argv = parser(process.argv.slice(2), {
-  alias: { template: ['t'], up: ['u'], down: ['d'], preview: ['p'], force: ['f'] },
-  string: ['template', 'description'],
-  boolean: ['preview', 'force']
+  alias: { up: ['u'], down: ['d'], preview: ['p'], force: ['f'], defaults: ['d'], column: ['c'], table: ['t'] },
+  string: ['description', 'table'],
+  boolean: ['preview', 'force'],
+  array: ['column']
 });
 
 const appNameLower = PKG.name;
 const appName = appNameLower.charAt(0).toUpperCase() + appNameLower.slice(1);
 const cwd = process.cwd();
-const cmd = argv._[0];
-const commands = ['create', 'up', 'down', 'init', 'help', 'list', 'show', 'get', 'set', 'config', 'revert', 'examples'];
+let cmd = argv._[0];
+let template = 'default';
+const commands = [
+  'generate', 'g', 'up', 'down', 'init',
+  'help', 'list', 'show', 'get', 'set',
+  'config', 'revert', 'examples'
+];
+
+if (cmd.startsWith('create')) // support legacy.
+  cmd = cmd.replace('create', 'generate');
+
+if (cmd.includes(':')) {
+  const segments = cmd.split(':');
+  cmd = segments[0];
+  template = segments[1] || 'default';
+}
+
+cmd = cmd === 'g' ? 'generate' : cmd;
 
 if (!commands.includes(cmd))
   process.exit();
@@ -31,35 +48,38 @@ ${nameStr} (${verStr})
 ${colorize(`Usage: ${appNameLower} <command> [...options]`, 'dim')}
 
 ${colorize('Commands:', 'cyanBright')}
-  create  [name]                  generates migration from template
-  up      [name, count, or all]   runs up migration
-  down    [name, count or all]    runs down migration
-  show    [name]                  outputs migration file to console
-  get     [key]                   gets value of app config key
-  set     [key] [value]           sets value of app config key
-  revert                          reverts or undos last migration
-  reset                           resets all migrations
-  list                            shows list of migration files
-  config                          shows the app's config
-  init                            initializes copying blueprints
-  examples                        shows examples
-  help                            show the help menu
+  generate, g  <name>               generates migration from template
+    generate:template <name>        generate using specific template
+  up        [name]                  runs up migration one level
+  down      [name, count or all]    runs down migration
+  show      <name>                  outputs migration file to console
+  get       <key>                   gets value of app config key
+  set       <key> <value>           sets value of app config key
+  revert                            reverts or undos last migration
+  reset                             resets all migrations
+  list                              shows list of migration files
+  config                            shows the app's config
+  init                              initializes copying blueprints
+  examples                          shows examples
+  help                              show the help menu
 
 ${colorize('Options:', 'cyanBright')}
-  --template, -t            specifies the template to be used
-  --up, -u                  specify migration up command string
-  --down, -d                specify migration down command string
-  --description, -e         specify migration description
-  --preview, -p             up, down or reset shows dry run
-  --stacktrace, -s          errors will show stacktrace
-  --force, -f               forces migration action
+  --defaults, -d            flag useful in template generation          [boolean]
+  --table, -t               specify table name for migrations            [string]
+  --column, -c              specify column(s) to pass to template   Array<string>
+  --up, -u                  specify migration up command string          [string]
+  --down, -d                specify migration down command string        [string]
+  --description, -e         specify migration description                [string]
+  --preview, -p             up, down or reset shows dry run             [boolean]
+  --stacktrace, -s          errors will show stacktrace                 [boolean]
+  --force, -f               forces migration action                     [boolean]
 `;
 
 const examples = `
 ${colorize('Examples:', 'cyanBright')}
-  ${appNameLower} create user
-  ${appNameLower} create user --template my-template
-  ${appNameLower} create user_table --up='CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY AUTOINCREMENT)' --down='DROP TABLE IF EXISTS user' --description='ACL permissions table.'
+  ${appNameLower} generate user_table (uses default template)
+  ${appNameLower} g:create user_table (uses create template)
+  ${appNameLower} generate:create user_table --up='CREATE TABLE IF NOT EXISTS user (id INTEGER PRIMARY KEY AUTOINCREMENT)' --down='DROP TABLE IF EXISTS user' --description='ACL permissions table.'
   ${appNameLower} up user
   ${appNameLower} up 2
   ${appNameLower} up all
@@ -74,7 +94,7 @@ function exit(code = 0) {
 }
 
 function handleResult(result: IMigrationResult) {
-  let names = !result.names.length ? 'none' : result.names;
+  let names = !result.names?.length ? 'none' : result.names;
   if (Array.isArray(names))
     names = names.map(f => getBaseName(f)).join(', ');
   let message = result.message;
@@ -87,9 +107,12 @@ function handleResult(result: IMigrationResult) {
   if (stack.length)
     message = message + '\n' + stack;
   console.log(`\n${result.ok ? symbols.success : symbols.error} ${message}\n`);
-  console.log(`  direction: ${result.type}`);
-  console.log(`  migrations: ${names}`);
-  console.log(`  count: ${result.count}\n`);
+  if (result.type)
+    console.log(`  direction: ${result.type}`);
+  if (result.names)
+    console.log(`  migrations: ${names}`);
+  if (typeof result.count !== 'undefined')
+    console.log(`  count: ${result.count}\n`);
   exit();
 }
 
@@ -150,6 +173,9 @@ async function listen() {
       }
       else if (key === 'directory') {
         val = val || MYGRA_DEFAULT_PATH;
+      }
+      else if (key === 'templatePrefix') {
+        val = /true/.test(val) ? true : false;
       }
       config.set(key, val);
     }
@@ -231,19 +257,18 @@ async function listen() {
 
     }
 
-    else if (cmd === 'create') {
-      const { _, $0, ...rest } = argv;
-      const result = await mygra.create({
+    else if (cmd === 'generate') {
+      const { _, $0, column, ...rest } = argv;
+      rest.columns = column || [];
+      const opts = {
         name: _[1],
+        template,
+        description: '',
         ...rest
-      });
-      const symbol = result.ok ? symbols.success : symbols.error;
-      if (result.ok) {
-        console.log(symbol, result.message);
-      }
-      else {
-        console.error(symbol, result.message);
-      }
+      } as any;
+      opts.table = opts.table || opts.name;
+      const result = await mygra.create(opts);
+      handleResult(result as any);
       exit();
     }
 
@@ -284,8 +309,11 @@ async function listen() {
 
     }
 
-  }
+    else {
+      exit();
+    }
 
+  }
 
 }
 

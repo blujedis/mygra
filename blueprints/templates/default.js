@@ -1,5 +1,5 @@
-module.exports = ({ name, up, down, description }) => `
-const name = '${name}';
+module.exports = ({ up, down, description }) => `
+
 const description = '${description}';
 
 async function up(conn, cb) {
@@ -11,7 +11,6 @@ async function down(conn, cb) {
 }
 
 module.exports = {
-  name,
   description,
   up,
   down
