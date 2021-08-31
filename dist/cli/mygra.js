@@ -173,7 +173,9 @@ class Mygra extends events_1.EventEmitter {
         return __awaiter(this, void 0, void 0, function* () {
             const filenames = yield this.getFilenames();
             const stripped = filenames.map(v => path_1.parse(v).name.replace(/^\d+_/, ''));
-            const found = stripped.findIndex(v => v.indexOf(name));
+            const found = stripped.findIndex(v => {
+                return v.indexOf(name) !== -1;
+            });
             return found === -1;
         });
     }

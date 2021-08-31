@@ -165,7 +165,9 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
   async isUniqueName(name: string) {
     const filenames = await this.getFilenames();
     const stripped = filenames.map(v => parse(v).name.replace(/^\d+_/, ''));
-    const found = stripped.findIndex(v => v.indexOf(name));
+    const found = stripped.findIndex(v => {
+      return v.indexOf(name) !== -1;
+    });
     return found === -1;
   }
 
@@ -518,7 +520,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
 
       }
 
-     
+
       result.ok = count === success;
 
     }
@@ -596,7 +598,7 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
           });
       }
 
-      
+
       result.ok = count === success;
 
     }
@@ -803,9 +805,9 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
     result.failed = Math.max(0, count - success);
     result.names = migrated.map(m => m.filename);
 
-    if (result.ok) 
+    if (result.ok)
       result.message = `Migration reset successful`;
-    
+
     // Update the active migration when
     // result status is ok store last migration run.
     if (result.ok && migrated.length) {

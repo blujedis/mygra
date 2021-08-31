@@ -3241,7 +3241,9 @@ class Mygra extends events.EventEmitter {
     async isUniqueName(name) {
         const filenames = await this.getFilenames();
         const stripped = filenames.map(v => require$$1.parse(v).name.replace(/^\d+_/, ''));
-        const found = stripped.findIndex(v => v.indexOf(name));
+        const found = stripped.findIndex(v => {
+            return v.indexOf(name) !== -1;
+        });
         return found === -1;
     }
     /**
