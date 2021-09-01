@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.2.1](https://github.com/blujedis/mygra/compare/v0.2.0...v0.2.1) (2021-09-01)
+
+### Features
+
+- **directory:** add feat to open config dir ([12c87f6](https://github.com/blujedis/mygra/commit/12c87f61a06c8918269e4df83fbaadbadaee82e6))
+
+### Bug Fixes
+
+- **migration name:** better handling of migration names ([d9109fc](https://github.com/blujedis/mygra/commit/d9109fcb0849ce471129727e73c47b23e9cd10de))
+
 ## [0.2.0](https://github.com/blujedis/mygra/compare/v0.1.1...v0.2.0) (2021-08-22)
 
 ### Features
