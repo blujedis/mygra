@@ -97,6 +97,7 @@
     "fast-glob": "^3.2.7",
     "flat-cache": "^3.0.4",
     "log-symbols": "^4.1.0",
+    "open": "^8.2.1",
     "yargs-parser": "^20.2.9"
   }
 }

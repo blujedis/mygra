@@ -169,6 +169,34 @@ You may receive an error complaining about the requested migration being out of 
 - You've requested a migration that's already be run. In our above example you ran the `cart_table` migration but then next call the `acl_table` migration but it's already been run.
 - The named migration you've specified does not exist.
 
+## Renamed Project
+
+We base your config filename off of the package.json project name. If you rename your project you will end up with a default config.
+
+If you move your project the path to your `mygra` migrations and templates likely in the root of your project will have a different. We can easily correct either of those.
+
+If you've renamed your project run the following command and open the `mygra` config folder which is stored in your home directory:
+
+```sh
+mygra config --open
+```
+
+Find the old config file using the previous project name and open it in a text editor of your choice, then copy the JSON you see.
+
+Either manually create a new config file with the proper project name or open the blank one that might have been created.
+
+Next just paste in the config from the old config file and you should be good as new.
+
+## Moved Project
+
+When you move a project the config file will still be found as it is named after your project name. However while it will find the correct config you'll find that migrations won't run as the migrations folder path stored in the config won't be correct.
+
+To resolve this update the directory path using the command line.
+
+```sh
+mygra set directory '/path/to/project/mygra'
+```
+
 ## No Remove Migration
 
 Why is there no remove migration?

@@ -1,5 +1,5 @@
 /*!
- * Mygra v0.1.1
+ * Mygra v0.2.0
  * (c) Blujedi LLC <blujedicorp@gmail.com>
  * Released under the MIT License.
  */
@@ -2983,11 +2983,16 @@ function colorize(str, ...styles) {
  * @returns
  */
 function initConfig(name = APP_PKG.name, directory = MYGRA_CONFIG_DIR) {
+    const filename = `${name}.config.json`;
+    const fullpath = require$$1.join(directory, filename);
     const config = flatCache__default['default'].load(`${name}.config.json`, directory);
     const api = {
         get props() {
             return config.all();
         },
+        directory,
+        filename,
+        fullpath,
         defaults,
         get,
         set,
@@ -3422,9 +3427,10 @@ class Mygra extends events.EventEmitter {
             : `Migration out of scope, no files match request`;
         const names = preview ? migrations.map(m => require$$1.parse(m.filename).name) : [];
         const count = migrations.length;
+        const ok = preview || !!migrations.length;
         return {
             type: dir,
-            ok: !!migrations.length,
+            ok,
             message,
             count,
             success: 0,

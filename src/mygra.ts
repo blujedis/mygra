@@ -432,10 +432,11 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
       : `Migration out of scope, no files match request`;
     const names = preview ? migrations.map(m => parse(m.filename).name) : [];
     const count = migrations.length;
+    const ok = preview || !!migrations.length
 
     return {
       type: dir,
-      ok: !!migrations.length,
+      ok,
       message,
       count,
       success: 0,
@@ -519,7 +520,6 @@ export class Mygra<C extends ConnectionHandler = ConnectionHandler> extends Even
           });
 
       }
-
 
       result.ok = count === success;
 

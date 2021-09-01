@@ -48,10 +48,16 @@ const mygra_1 = require("./mygra");
 const log_symbols_1 = __importDefault(require("log-symbols"));
 const fs_extra_1 = require("fs-extra");
 const utils_1 = require("./utils");
+const open_1 = __importDefault(require("open"));
 const argv = yargs_parser_1.default(process.argv.slice(2), {
-    alias: { up: ['u'], down: ['d'], preview: ['p'], force: ['f'], defaults: ['d'], column: ['c'], table: ['t'] },
+    alias: {
+        up: ['u'], down: ['d'],
+        preview: ['p'], force: ['f'],
+        defaults: ['d'], column: ['c'],
+        table: ['t'], open: ['o']
+    },
     string: ['description', 'table'],
-    boolean: ['preview', 'force'],
+    boolean: ['preview', 'force', 'open'],
     array: ['column']
 });
 const appNameLower = utils_1.PKG.name;
@@ -107,6 +113,7 @@ ${utils_1.colorize('Options:', 'cyanBright')}
   --description, -e         specify migration description                [string]
   --preview, -p             up, down or reset shows dry run             [boolean]
   --stacktrace, -s          errors will show stacktrace                 [boolean]
+  --open, -o                opens config directory                      [boolean]
   --force, -f               forces migration action                     [boolean]
 `;
 const examples = `
@@ -183,7 +190,12 @@ function listen() {
                 console.log(examples);
             }
             else if (cmd === 'config') {
-                console.log(config.props);
+                if (argv.open) {
+                    open_1.default(config.directory);
+                }
+                else {
+                    console.log(config.props);
+                }
             }
             else if (cmd === 'get') {
                 console.log(config.get(argv._[1]));

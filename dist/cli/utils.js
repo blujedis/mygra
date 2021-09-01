@@ -123,11 +123,16 @@ exports.colorize = colorize;
  * @returns
  */
 function initConfig(name = exports.APP_PKG.name, directory = exports.MYGRA_CONFIG_DIR) {
+    const filename = `${name}.config.json`;
+    const fullpath = path_1.join(directory, filename);
     const config = flat_cache_1.default.load(`${name}.config.json`, directory);
     const api = {
         get props() {
             return config.all();
         },
+        directory,
+        filename,
+        fullpath,
         defaults,
         get,
         set,

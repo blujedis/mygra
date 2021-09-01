@@ -63,6 +63,9 @@ export declare function initConfig<T extends Record<string, any>>(name?: any, di
     readonly props: {
         [key: string]: any;
     };
+    directory: string;
+    filename: string;
+    fullpath: string;
     defaults: (initDefaults?: Partial<T>) => void;
     get: (key: string) => any;
     set: {

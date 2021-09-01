@@ -362,9 +362,10 @@ class Mygra extends events_1.EventEmitter {
             : `Migration out of scope, no files match request`;
         const names = preview ? migrations.map(m => path_1.parse(m.filename).name) : [];
         const count = migrations.length;
+        const ok = preview || !!migrations.length;
         return {
             type: dir,
-            ok: !!migrations.length,
+            ok,
             message,
             count,
             success: 0,

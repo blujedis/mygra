@@ -122,12 +122,17 @@ export function colorize(str: string, ...styles: (keyof StylesType<any>)[]) {
  */
 export function initConfig<T extends Record<string, any>>(name = APP_PKG.name, directory = MYGRA_CONFIG_DIR) {
 
+  const filename = `${name}.config.json`;
+  const fullpath = join(directory, filename);
   const config = flatCache.load(`${name}.config.json`, directory);
 
   const api = {
     get props() {
       return config.all();
     },
+    directory,
+    filename,
+    fullpath,
     defaults,
     get,
     set,

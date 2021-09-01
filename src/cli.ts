@@ -4,12 +4,18 @@ import { Mygra } from './mygra';
 import symbols from 'log-symbols';
 import { copySync, existsSync } from 'fs-extra';
 import { colorize, MYGRA_DEFAULT_PATH, initConfig, PKG, APP_PKG, findIndex, colorizeError, getBaseName } from './utils';
+import open from 'open';
 import { IMigrationResult, IMygra } from './types';
 
 const argv = parser(process.argv.slice(2), {
-  alias: { up: ['u'], down: ['d'], preview: ['p'], force: ['f'], defaults: ['d'], column: ['c'], table: ['t'] },
+  alias: {
+    up: ['u'], down: ['d'],
+    preview: ['p'], force: ['f'],
+    defaults: ['d'], column: ['c'],
+    table: ['t'], open: ['o']
+  },
   string: ['description', 'table'],
-  boolean: ['preview', 'force'],
+  boolean: ['preview', 'force', 'open'],
   array: ['column']
 });
 
@@ -72,6 +78,7 @@ ${colorize('Options:', 'cyanBright')}
   --description, -e         specify migration description                [string]
   --preview, -p             up, down or reset shows dry run             [boolean]
   --stacktrace, -s          errors will show stacktrace                 [boolean]
+  --open, -o                opens config directory                      [boolean]
   --force, -f               forces migration action                     [boolean]
 `;
 
@@ -158,7 +165,12 @@ async function listen() {
     }
 
     else if (cmd === 'config') {
-      console.log(config.props);
+      if (argv.open) {
+        open(config.directory);
+      }
+      else {
+        console.log(config.props);
+      }
     }
 
     else if (cmd === 'get') {
